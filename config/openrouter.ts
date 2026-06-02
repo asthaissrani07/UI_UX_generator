@@ -16,5 +16,4 @@ export function getOpenRouter() {
   return _client;
 }
 
-export const AI_MODEL =
-  process.env.OPENROUTER_MODEL ?? "openrouter/free";
+export { AI_MODEL } from "@/lib/openrouter-chat";

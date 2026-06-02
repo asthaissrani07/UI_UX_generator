@@ -1,5 +1,6 @@
 import { getAppUrl } from "@/lib/app-url";
 import { extractMessageText } from "@/lib/ai-content";
+import { getModelChain, isRateLimitError } from "@/config/models";
 
 export const AI_MODEL =
   process.env.OPENROUTER_MODEL ?? "openrouter/free";
@@ -9,10 +10,10 @@ type ChatMessage = {
   content: string;
 };
 
-export async function openRouterChat(
+async function openRouterChatOnce(
   messages: ChatMessage[],
-  model = AI_MODEL,
-  maxTokens = 8192
+  model: string,
+  maxTokens: number
 ): Promise<string> {
   const apiKey = process.env.OPENROUTER_API_KEY;
   if (!apiKey) {
@@ -40,18 +41,25 @@ export async function openRouterChat(
     choices?: Array<{ message?: { content?: string | unknown[] } }>;
   };
 
+  const detail = body.error?.message ?? res.statusText;
+
   if (!res.ok) {
-    const detail = body.error?.message ?? res.statusText;
     if (res.status === 401 || res.status === 403) {
       throw new Error(`OpenRouter auth failed (${res.status}): ${detail}`);
     }
     if (res.status === 402) {
       throw new Error(`OpenRouter credits exhausted: ${detail}`);
     }
+    if (res.status === 429 || isRateLimitError(detail)) {
+      throw new Error(`OpenRouter rate limit (${model}): ${detail}`);
+    }
     throw new Error(`OpenRouter error (${res.status}): ${detail}`);
   }
 
   if (body.error?.message) {
+    if (isRateLimitError(body.error.message)) {
+      throw new Error(`OpenRouter rate limit (${model}): ${body.error.message}`);
+    }
     throw new Error(`OpenRouter error: ${body.error.message}`);
   }
 
@@ -61,6 +69,37 @@ export async function openRouterChat(
   }
 
   return text;
+}
+
+/** Tries primary model, then free fallbacks when rate-limited. */
+export async function openRouterChat(
+  messages: ChatMessage[],
+  model = AI_MODEL,
+  maxTokens = 8192
+): Promise<string> {
+  const chain = getModelChain(model);
+  let lastError: Error | null = null;
+
+  for (const candidate of chain) {
+    try {
+      return await openRouterChatOnce(messages, candidate, maxTokens);
+    } catch (e) {
+      const errMsg = e instanceof Error ? e.message : String(e);
+      if (isRateLimitError(errMsg) && chain.indexOf(candidate) < chain.length - 1) {
+        console.warn(`[OpenRouter] ${candidate} limited — trying next model`);
+        lastError = e instanceof Error ? e : new Error(errMsg);
+        continue;
+      }
+      throw e;
+    }
+  }
+
+  throw (
+    lastError ??
+    new Error(
+      "All free models are rate-limited. Wait an hour, switch OPENROUTER_MODEL, or add $5 credits at openrouter.ai"
+    )
+  );
 }
 
 export function formatServerError(e: unknown): string {
@@ -78,7 +117,10 @@ export function formatServerError(e: unknown): string {
     return "OpenRouter rejected the API key. Check OPENROUTER_API_KEY on Vercel.";
   }
   if (/402|credits exhausted|insufficient/i.test(errMsg)) {
-    return "OpenRouter credits exhausted. Add credits at openrouter.ai";
+    return "OpenRouter credits exhausted. Add ~$5 at openrouter.ai/settings/credits and set OPENROUTER_MODEL=openai/gpt-4o-mini";
+  }
+  if (isRateLimitError(errMsg) || /All free models are rate-limited/i.test(errMsg)) {
+    return "Free AI limit reached on all fallback models. Wait 1–2 hours, set OPENROUTER_MODEL=qwen/qwen3-coder:free, or add $5 OpenRouter credits for gpt-4o-mini.";
   }
   if (/DATABASE_URL|connection|ECONNREFUSED/i.test(errMsg)) {
     return "Database connection failed. Check DATABASE_URL on Vercel.";
@@ -93,7 +135,7 @@ export function formatServerError(e: unknown): string {
     return "Database field limit exceeded. Retry — this build truncates long values.";
   }
   if (/404|No endpoints found/i.test(errMsg)) {
-    return "Model not found on OpenRouter. Set OPENROUTER_MODEL to openrouter/free or qwen/qwen3-coder:free on Vercel.";
+    return "Model not found on OpenRouter. Set OPENROUTER_MODEL to qwen/qwen3-coder:free on Vercel.";
   }
   if (errMsg.includes("OpenRouter error")) {
     return errMsg;
