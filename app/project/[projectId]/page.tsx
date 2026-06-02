@@ -11,6 +11,8 @@ import SettingSection from "@/components/shared/setting-section";
 import Canvas from "@/components/shared/canvas";
 import {
   captureAllIframes,
+  compressDataUrlForStorage,
+  downloadDataUrl,
   getScreenIframes,
 } from "@/lib/capture-screenshot";
 import type { ProjectType, ScreenConfig } from "@/types";
@@ -98,18 +100,24 @@ export default function ProjectCanvasPage() {
 
   const saveScreenshotQuiet = useCallback(async () => {
     try {
-      await new Promise((r) => setTimeout(r, 1500));
-      const url = await captureAllIframes(getScreenIframes());
+      await new Promise((r) => setTimeout(r, 2000));
+      const ready = getScreenIframes();
+      if (ready.length === 0) return;
+      const full = await captureAllIframes(ready);
+      const thumbnail = await compressDataUrlForStorage(full);
       await axios.put("/api/project", {
         projectId,
-        screenshot: url,
+        screenshot: thumbnail,
         projectName: projectDetail?.projectName,
         theme: projectDetail?.theme,
       });
+      setProjectDetail((prev) =>
+        prev ? { ...prev, screenshot: thumbnail } : prev
+      );
     } catch {
       /* background save */
     }
-  }, [projectId, projectDetail]);
+  }, [projectId, projectDetail?.projectName, projectDetail?.theme]);
 
   useEffect(() => {
     (async () => {
@@ -145,21 +153,26 @@ export default function ProjectCanvasPage() {
         toast.error("Wait until all screens finish loading, then try again.");
         return;
       }
-      const url = await captureAllIframes(ready);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `${projectDetail?.projectName ?? "canvas"}.png`;
-      a.click();
+      const full = await captureAllIframes(ready);
+      const name = (projectDetail?.projectName ?? "canvas").replace(
+        /[^\w\s.-]/g,
+        "_"
+      );
+      downloadDataUrl(full, `${name}.png`);
+
+      const thumbnail = await compressDataUrlForStorage(full);
       await axios.put("/api/project", {
         projectId,
-        screenshot: url,
+        screenshot: thumbnail,
         projectName: projectDetail?.projectName,
         theme: activeTheme,
       });
       setProjectDetail((prev) =>
-        prev ? { ...prev, theme: activeTheme, screenshot: url } : prev
+        prev
+          ? { ...prev, theme: activeTheme, screenshot: thumbnail }
+          : prev
       );
-      toast.success("Screenshot saved");
+      toast.success("Screenshot downloaded and saved");
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Screenshot failed";
       toast.error(msg);

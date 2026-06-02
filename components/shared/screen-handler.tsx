@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type RefObject } from "react";
 import axios from "axios";
 import { toast } from "sonner";
 import {
@@ -19,7 +19,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
-import { captureIframe } from "@/lib/capture-screenshot";
+import { captureIframe, downloadDataUrl } from "@/lib/capture-screenshot";
 import type { ScreenConfig } from "@/types";
 
 type DragHandleProps = {
@@ -35,7 +35,7 @@ type Props = {
   device: string;
   theme: string;
   projectVisualDescription?: string | null;
-  iframeRef: HTMLIFrameElement | null;
+  iframeRef: RefObject<HTMLIFrameElement | null>;
   onUpdated: (screen: ScreenConfig) => void;
   onDeleted: (screenId: string) => void;
   dragHandleProps: DragHandleProps;
@@ -59,16 +59,25 @@ export default function ScreenHandler({
   const [editPrompt, setEditPrompt] = useState("");
   const [loading, setLoading] = useState(false);
 
+  const [downloading, setDownloading] = useState(false);
+
   const downloadPng = async () => {
-    if (!iframeRef) return;
+    const frame = iframeRef.current;
+    if (!frame) {
+      toast.error("Screen still loading — wait a moment and try again.");
+      return;
+    }
+    setDownloading(true);
     try {
-      const dataUrl = await captureIframe(iframeRef);
-      const a = document.createElement("a");
-      a.href = dataUrl;
-      a.download = `${screen.screenName ?? "screen"}.png`;
-      a.click();
-    } catch {
-      toast.error("Download failed");
+      const dataUrl = await captureIframe(frame);
+      const name = (screen.screenName ?? "screen").replace(/[^\w\s.-]/g, "_");
+      downloadDataUrl(dataUrl, `${name}.png`);
+      toast.success("Download started");
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Download failed";
+      toast.error(msg);
+    } finally {
+      setDownloading(false);
     }
   };
 
@@ -140,9 +149,14 @@ export default function ScreenHandler({
             variant="ghost"
             size="icon-sm"
             onClick={downloadPng}
+            disabled={downloading}
             title="Download PNG"
           >
-            <Download className="h-4 w-4" />
+            {downloading ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Download className="h-4 w-4" />
+            )}
           </Button>
           <Button
             variant="ghost"

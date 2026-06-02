@@ -30,8 +30,12 @@ export default function ProjectHeader({ onSaved }: Props) {
         theme: settingDetail.theme ?? undefined,
       });
       toast.success("Settings saved");
-    } catch {
-      toast.error("Save failed");
+    } catch (err) {
+      const message =
+        axios.isAxiosError(err) && err.response?.data?.message
+          ? String(err.response.data.message)
+          : "Save failed";
+      toast.error(message);
     } finally {
       setLoading(false);
     }

@@ -99,6 +99,17 @@ export async function PUT(req: NextRequest) {
     const body = await req.json();
     const { projectId, projectName, theme, screenshot } = body;
 
+    if (!projectId) {
+      return NextResponse.json({ message: "projectId required" }, { status: 400 });
+    }
+
+    if (typeof screenshot === "string" && screenshot.length > 2_000_000) {
+      return NextResponse.json(
+        { message: "Screenshot too large to save. Try again — the app compresses thumbnails automatically." },
+        { status: 413 }
+      );
+    }
+
     const [updated] = await getDb()
       .update(projectTable)
       .set({
@@ -114,9 +125,14 @@ export async function PUT(req: NextRequest) {
       )
       .returning();
 
+    if (!updated) {
+      return NextResponse.json({ message: "Project not found" }, { status: 404 });
+    }
+
     return NextResponse.json(updated);
   } catch (e) {
     console.error(e);
-    return NextResponse.json({ message: "Error" }, { status: 500 });
+    const msg = e instanceof Error ? e.message : "Error";
+    return NextResponse.json({ message: msg }, { status: 500 });
   }
 }

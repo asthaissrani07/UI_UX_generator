@@ -2,7 +2,7 @@ import { getAppUrl } from "@/lib/app-url";
 import { extractMessageText } from "@/lib/ai-content";
 
 export const AI_MODEL =
-  process.env.OPENROUTER_MODEL ?? "openai/gpt-4o-mini";
+  process.env.OPENROUTER_MODEL ?? "openrouter/free";
 
 type ChatMessage = {
   role: "system" | "user" | "assistant";
@@ -89,6 +89,9 @@ export function formatServerError(e: unknown): string {
   }
   if (/value too long|character varying/i.test(errMsg)) {
     return "Database field limit exceeded. Retry — this build truncates long values.";
+  }
+  if (/404|No endpoints found/i.test(errMsg)) {
+    return "Model not found on OpenRouter. Set OPENROUTER_MODEL to openrouter/free or qwen/qwen3-coder:free on Vercel.";
   }
   if (errMsg.includes("OpenRouter error")) {
     return errMsg;

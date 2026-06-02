@@ -17,4 +17,4 @@ export function getOpenRouter() {
 }
 
 export const AI_MODEL =
-  process.env.OPENROUTER_MODEL ?? "openai/gpt-4o-mini";
+  process.env.OPENROUTER_MODEL ?? "openrouter/free";

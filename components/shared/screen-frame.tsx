@@ -131,13 +131,14 @@ export default function ScreenFrame({
         device={projectDetail.device}
         theme={theme}
         projectVisualDescription={projectDetail.projectVisualDescription}
-        iframeRef={iframeRef.current}
+        iframeRef={iframeRef}
         onUpdated={onScreenUpdated}
         onDeleted={onScreenDeleted}
         dragHandleProps={handleProps}
         isDragging={isDragging}
       />
       <div
+        data-screen-capture
         className="relative shrink-0 overflow-hidden bg-white"
         style={{ height: viewportH, minHeight: viewportH }}
       >

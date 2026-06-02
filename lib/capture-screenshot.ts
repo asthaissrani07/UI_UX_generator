@@ -1,6 +1,36 @@
 import { toPng } from "html-to-image";
 
-function waitForIframeReady(iframe: HTMLIFrameElement, timeout = 5000): Promise<void> {
+const CAPTURE_OPTS = {
+  cacheBust: true,
+  pixelRatio: 1.25,
+  backgroundColor: "#ffffff",
+  skipFonts: true,
+  filter: (node: HTMLElement) => {
+    if (node.tagName === "SCRIPT") return false;
+    if (node.tagName === "LINK") return false;
+    if (node.tagName === "IMG") {
+      const src = (node as HTMLImageElement).src;
+      if (src && !src.startsWith("data:") && !src.startsWith("blob:")) {
+        return false;
+      }
+    }
+    return true;
+  },
+} as const;
+
+function loadImage(src: string): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = () => reject(new Error("Failed to load captured image"));
+    img.src = src;
+  });
+}
+
+function waitForIframeReady(
+  iframe: HTMLIFrameElement,
+  timeout = 8000
+): Promise<void> {
   return new Promise((resolve, reject) => {
     const deadline = Date.now() + timeout;
 
@@ -11,19 +41,57 @@ function waitForIframeReady(iframe: HTMLIFrameElement, timeout = 5000): Promise<
         return;
       }
       if (Date.now() > deadline) {
-        reject(new Error("Iframe content not ready"));
+        reject(new Error("Screen content not ready yet"));
         return;
       }
       requestAnimationFrame(check);
     };
 
     if (iframe.contentDocument?.readyState === "complete") {
-      check();
+      setTimeout(check, 200);
     } else {
-      iframe.addEventListener("load", () => check(), { once: true });
-      setTimeout(check, 300);
+      iframe.addEventListener("load", () => setTimeout(check, 200), {
+        once: true,
+      });
+      setTimeout(check, 400);
     }
   });
+}
+
+async function captureNode(node: HTMLElement): Promise<string> {
+  return toPng(node, CAPTURE_OPTS);
+}
+
+export function downloadDataUrl(dataUrl: string, filename: string) {
+  const safeName = filename.replace(/[^\w\s.-]/g, "_").trim() || "screenshot";
+  const a = document.createElement("a");
+  a.href = dataUrl;
+  a.download = safeName.endsWith(".png") ? safeName : `${safeName}.png`;
+  a.rel = "noopener";
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+}
+
+export async function compressDataUrlForStorage(
+  dataUrl: string,
+  maxWidth = 720,
+  quality = 0.75
+): Promise<string> {
+  const img = await loadImage(dataUrl);
+  const scale = img.width > maxWidth ? maxWidth / img.width : 1;
+  const w = Math.max(1, Math.round(img.width * scale));
+  const h = Math.max(1, Math.round(img.height * scale));
+  const canvas = document.createElement("canvas");
+  canvas.width = w;
+  canvas.height = h;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) throw new Error("Could not compress screenshot");
+
+  ctx.fillStyle = "#f4f4f5";
+  ctx.fillRect(0, 0, w, h);
+  ctx.drawImage(img, 0, 0, w, h);
+  return canvas.toDataURL("image/jpeg", quality);
 }
 
 export async function captureIframe(
@@ -31,28 +99,33 @@ export async function captureIframe(
 ): Promise<string> {
   await waitForIframeReady(iframe);
   const doc = iframe.contentDocument;
-  if (!doc?.body) throw new Error("Iframe not ready");
+  if (!doc?.body) throw new Error("Screen preview not ready");
 
-  try {
-    return await toPng(doc.body, {
-      cacheBust: true,
-      pixelRatio: 1.5,
-      backgroundColor: "#ffffff",
-      skipFonts: true,
-    });
-  } catch {
-    // Fallback: capture visible frame wrapper (includes iframe paint in most browsers)
-    const wrapper = iframe.closest("[data-screen-capture]");
-    if (wrapper instanceof HTMLElement) {
-      return await toPng(wrapper, {
-        cacheBust: true,
-        pixelRatio: 1.5,
-        backgroundColor: "#f4f4f5",
-        skipFonts: true,
-      });
+  const targets = [doc.body, doc.documentElement].filter(
+    (node): node is HTMLElement => node instanceof HTMLElement
+  );
+
+  for (const target of targets) {
+    try {
+      return await captureNode(target);
+    } catch {
+      /* try next target */
     }
-    throw new Error("Could not capture screen");
   }
+
+  const wrapper = iframe.closest("[data-screen-capture]");
+  if (wrapper instanceof HTMLElement) {
+    try {
+      return await toPng(wrapper, {
+        ...CAPTURE_OPTS,
+        backgroundColor: "#f4f4f5",
+      });
+    } catch {
+      /* fall through */
+    }
+  }
+
+  throw new Error("Could not capture this screen. Try again in a moment.");
 }
 
 export function getScreenIframes(): HTMLIFrameElement[] {
@@ -85,14 +158,6 @@ export async function captureAllIframes(
     images.push(await captureIframe(frame));
   }
 
-  const loadImage = (src: string) =>
-    new Promise<HTMLImageElement>((resolve, reject) => {
-      const img = new Image();
-      img.onload = () => resolve(img);
-      img.onerror = reject;
-      img.src = src;
-    });
-
   const loaded = await Promise.all(images.map(loadImage));
   const gap = 24;
   const totalWidth = loaded.reduce((w, img) => w + img.width + gap, -gap);
@@ -101,7 +166,9 @@ export async function captureAllIframes(
   const canvas = document.createElement("canvas");
   canvas.width = totalWidth;
   canvas.height = maxHeight;
-  const ctx = canvas.getContext("2d")!;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) throw new Error("Could not build canvas image");
+
   ctx.fillStyle = "#f4f4f5";
   ctx.fillRect(0, 0, totalWidth, maxHeight);
 
