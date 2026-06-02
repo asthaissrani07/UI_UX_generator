@@ -6,7 +6,7 @@ Full-stack SaaS app matching the [TubeGuruji tutorial](https://youtu.be/c9qA-uhy
 
 - Landing page with prompt input, device type (website / mobile), and prompt suggestions
 - Clerk authentication (Google / email)
-- AI layout config then per-screen HTML + Tailwind mockups (OpenRouter)
+- AI layout config then per-screen HTML + Tailwind mockups (Groq)
 - Draggable, resizable canvas with zoom/pan
 - Theme switching without regenerating screens
 - View source code, download PNG, edit with AI, delete screens
@@ -20,7 +20,7 @@ Full-stack SaaS app matching the [TubeGuruji tutorial](https://youtu.be/c9qA-uhy
 - **Tailwind CSS** + shadcn-style UI
 - **Neon** PostgreSQL + **Drizzle ORM**
 - **Clerk** auth + billing
-- **OpenRouter** AI
+- **Groq** AI
 - `react-zoom-pan-pinch`, `react-rnd`, `html-to-image`
 
 ## Setup
@@ -35,7 +35,7 @@ npm install
 
 - `DATABASE_URL` — [Neon](https://neon.tech) connection string
 - Clerk keys from [Clerk Dashboard](https://dashboard.clerk.com)
-- `OPENROUTER_API_KEY` from [OpenRouter](https://openrouter.ai/)
+- `GROQ_API_KEY` from [Groq Console](https://console.groq.com/keys)
 
 3. **Database**
 

@@ -4,12 +4,6 @@ function sleep(ms: number) {
   return new Promise((r) => setTimeout(r, ms));
 }
 
-function isRateLimit(err: unknown): boolean {
-  if (!axios.isAxiosError(err)) return false;
-  const msg = String(err.response?.data?.message ?? "");
-  return /rate limit|quota|429|free limit|RESOURCE_EXHAUSTED/i.test(msg);
-}
-
 export async function postGenerateWithModelRotation<T>(
   url: string,
   buildPayload: (modelAttempt: number) => Record<string, unknown>,
@@ -25,7 +19,6 @@ export async function postGenerateWithModelRotation<T>(
       return data;
     } catch (err) {
       last = err;
-      if (isRateLimit(err)) throw err;
       const status = axios.isAxiosError(err) ? (err.response?.status ?? 0) : 0;
       if (attempt < maxAttempts - 1 && [502, 503, 504, 500].includes(status)) {
         await sleep(4000);

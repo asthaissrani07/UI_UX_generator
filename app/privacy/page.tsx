@@ -40,7 +40,7 @@ export default function PrivacyPage() {
             <ul className="mt-2 list-disc space-y-1 pl-5 text-sm">
               <li>Clerk — authentication</li>
               <li>Neon — database hosting</li>
-              <li>OpenRouter — AI generation</li>
+              <li>Groq — AI generation</li>
             </ul>
           </section>
 

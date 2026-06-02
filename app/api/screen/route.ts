@@ -4,8 +4,7 @@ import { and, eq } from "drizzle-orm";
 import { getDb } from "@/config/db";
 import { projectTable, screenConfigTable } from "@/config/schema";
 import { hasPremiumAccess } from "@/lib/auth";
-import { getOpenRouter, AI_MODEL } from "@/config/openrouter";
-import { extractMessageText } from "@/lib/ai-content";
+import { groqChat } from "@/lib/groq-chat";
 
 export async function POST(req: NextRequest) {
   try {
@@ -45,18 +44,14 @@ Project: ${project.projectName}. Visual style: ${project.projectVisualDescriptio
 Theme: ${project.theme}.
 Return ONLY valid JSON: { "screenId": "unique", "name": "", "purpose": "", "layoutDescription": "" }`;
 
-    const completion = await getOpenRouter().chat.send({
-      model: AI_MODEL,
-      messages: [
+    const raw = await groqChat(
+      [
         { role: "system", content: systemPrompt },
         { role: "user", content: userInput },
       ],
-      stream: false,
-    });
+      1024
+    );
 
-    const raw = extractMessageText(
-      completion.choices?.[0]?.message?.content
-    ).trim();
     const jsonStr = raw.replace(/^```json?\s*/i, "").replace(/```\s*$/i, "");
     const screen = JSON.parse(jsonStr);
 
@@ -74,26 +69,7 @@ Return ONLY valid JSON: { "screenId": "unique", "name": "", "purpose": "", "layo
     return NextResponse.json(inserted);
   } catch (e) {
     console.error(e);
-    return NextResponse.json({ message: "Error" }, { status: 500 });
-  }
-}
-
-export async function DELETE(req: NextRequest) {
-  try {
-    const { projectId, screenId } = await req.json();
-
-    await getDb()
-      .delete(screenConfigTable)
-      .where(
-        and(
-          eq(screenConfigTable.projectId, projectId),
-          eq(screenConfigTable.screenId, String(screenId))
-        )
-      );
-
-    return NextResponse.json({ success: true });
-  } catch (e) {
-    console.error(e);
-    return NextResponse.json({ message: "Error" }, { status: 500 });
+    const msg = e instanceof Error ? e.message : "Error";
+    return NextResponse.json({ message: msg }, { status: 500 });
   }
 }
