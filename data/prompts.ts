@@ -35,7 +35,7 @@ Requirements:
 - Use semantic structure: header, main, sections, buttons, cards as needed.
 - Use placeholder images: https://picsum.photos/seed/{random}/400/300
 - Use realistic placeholder text matching the screen purpose.
-- Avatar URLs: https://i.pravatar.cc/150?u={random}
+- Avatar URLs: https://picsum.photos/seed/avatar-{name}/150/150 (do NOT use pravatar.cc)
 - Mobile: max-width feel ~390px content; Website: wider layout ~1200px content area.
 - MUST use semantic Tailwind classes tied to theme: bg-background, text-foreground, bg-primary, text-primary-foreground, bg-secondary, bg-card, text-card-foreground, bg-muted, text-muted-foreground, border-border, bg-accent. Do NOT use raw hex colors or generic gray-*/blue-* utilities.
 - Make it polished, modern SaaS quality — spacing, typography hierarchy, subtle shadows.

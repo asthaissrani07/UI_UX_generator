@@ -6,23 +6,30 @@ export function getThemeColors(themeName: string): ThemeColors {
 
 function tailwindConfigScript(theme: ThemeColors): string {
   return `<script>
-  tailwind.config = {
-    theme: {
-      extend: {
-        colors: {
-          background: '${theme.background}',
-          foreground: '${theme.foreground}',
-          primary: { DEFAULT: '${theme.primary}', foreground: '${theme.primaryForeground}' },
-          secondary: { DEFAULT: '${theme.secondary}', foreground: '${theme.secondaryForeground}' },
-          accent: { DEFAULT: '${theme.accent}', foreground: '${theme.accentForeground}' },
-          muted: { DEFAULT: '${theme.muted}', foreground: '${theme.mutedForeground}' },
-          card: { DEFAULT: '${theme.card}', foreground: '${theme.cardForeground}' },
-          popover: { DEFAULT: '${theme.popover}', foreground: '${theme.popoverForeground}' },
-          border: '${theme.border}',
+  (function applyTailwindConfig() {
+    if (typeof tailwind === "undefined") {
+      setTimeout(applyTailwindConfig, 30);
+      return;
+    }
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            background: '${theme.background}',
+            foreground: '${theme.foreground}',
+            primary: { DEFAULT: '${theme.primary}', foreground: '${theme.primaryForeground}' },
+            secondary: { DEFAULT: '${theme.secondary}', foreground: '${theme.secondaryForeground}' },
+            accent: { DEFAULT: '${theme.accent}', foreground: '${theme.accentForeground}' },
+            muted: { DEFAULT: '${theme.muted}', foreground: '${theme.mutedForeground}' },
+            card: { DEFAULT: '${theme.card}', foreground: '${theme.cardForeground}' },
+            popover: { DEFAULT: '${theme.popover}', foreground: '${theme.popoverForeground}' },
+            border: '${theme.border}',
+          }
         }
       }
-    }
-  };
+    };
+    if (tailwind.refresh) tailwind.refresh();
+  })();
 </script>`;
 }
 
@@ -70,8 +77,8 @@ const IFRAME_HEAD = `<!DOCTYPE html>
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=VIEWPORT_WIDTH, initial-scale=1, maximum-scale=1, user-scalable=no" />
-  TAILWIND_CONFIG_SCRIPT
   <script src="https://cdn.tailwindcss.com"></script>
+  TAILWIND_CONFIG_SCRIPT
   <script src="https://code.iconify.design/3/3.1.1/iconify.min.js"></script>
   <style id="theme-vars">
     THEME_CSS

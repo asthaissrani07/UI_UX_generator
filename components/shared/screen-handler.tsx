@@ -20,6 +20,7 @@ import {
 } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { captureIframe, downloadDataUrl } from "@/lib/capture-screenshot";
+import { postWithRetry } from "@/lib/api-retry";
 import type { ScreenConfig } from "@/types";
 
 type DragHandleProps = {
@@ -85,16 +86,19 @@ export default function ScreenHandler({
     if (!editPrompt.trim()) return;
     setLoading(true);
     try {
-      const { data } = await axios.post("/api/generate-screen-ui", {
-        projectId,
-        screenId: screen.screenId,
-        screenName: screen.screenName,
-        purpose: screen.purpose,
-        screenDescription: screen.screenDescription,
-        projectVisualDescription,
-        device,
-        editPrompt,
-      });
+      const data = await postWithRetry<ScreenConfig>(
+        "/api/generate-screen-ui",
+        {
+          projectId,
+          screenId: screen.screenId,
+          screenName: screen.screenName,
+          purpose: screen.purpose,
+          screenDescription: screen.screenDescription,
+          projectVisualDescription,
+          device,
+          editPrompt,
+        }
+      );
       onUpdated(data);
       setEditOpen(false);
       setEditPrompt("");

@@ -86,8 +86,8 @@ export function formatServerError(e: unknown): string {
   if (/relation .* does not exist|no such table/i.test(errMsg)) {
     return "Database tables missing. Run npm run db:push on production DATABASE_URL.";
   }
-  if (/timeout|ETIMEDOUT|FUNCTION_INVOCATION_TIMEOUT/i.test(errMsg)) {
-    return "AI request timed out. Please try again.";
+  if (/timeout|ETIMEDOUT|FUNCTION_INVOCATION_TIMEOUT|504|Gateway Timeout/i.test(errMsg)) {
+    return "AI request timed out. Vercel Hobby limits functions to ~10s — retrying usually works, or upgrade Vercel Pro for 60s timeouts.";
   }
   if (/value too long|character varying/i.test(errMsg)) {
     return "Database field limit exceeded. Retry — this build truncates long values.";

@@ -17,6 +17,7 @@ import {
 } from "@/lib/capture-screenshot";
 import type { ProjectType, ScreenConfig } from "@/types";
 import { isScreenCodeComplete } from "@/lib/validate-screen-html";
+import { postWithRetry } from "@/lib/api-retry";
 
 export default function ProjectCanvasPage() {
   const { projectId } = useParams<{ projectId: string }>();
@@ -72,17 +73,23 @@ export default function ProjectCanvasPage() {
       const screen = screenConfig[i];
       if (screen.code && isScreenCodeComplete(screen.code)) continue;
 
-      setLoadingMessage(`Generating screen ${i + 1}...`);
+      setLoadingMessage(`Generating screen ${i + 1} of ${screenConfig.length}...`);
       try {
-        const { data } = await axios.post("/api/generate-screen-ui", {
-          projectId,
-          screenId: screen.screenId,
-          screenName: screen.screenName,
-          purpose: screen.purpose,
-          screenDescription: screen.screenDescription,
-          projectVisualDescription: projectDetail.projectVisualDescription,
-          device: projectDetail.device,
-        });
+        if (i > 0) {
+          await new Promise((r) => setTimeout(r, 1500));
+        }
+        const data = await postWithRetry<ScreenConfig>(
+          "/api/generate-screen-ui",
+          {
+            projectId,
+            screenId: screen.screenId,
+            screenName: screen.screenName,
+            purpose: screen.purpose,
+            screenDescription: screen.screenDescription,
+            projectVisualDescription: projectDetail.projectVisualDescription,
+            device: projectDetail.device,
+          }
+        );
         setScreenConfig((prev) =>
           prev.map((item, idx) => (idx === i ? data : item))
         );
@@ -90,7 +97,10 @@ export default function ProjectCanvasPage() {
         const message =
           axios.isAxiosError(err) && err.response?.data?.message
             ? String(err.response.data.message)
-            : `Failed screen ${i + 1}`;
+            : err instanceof Error &&
+                /504|timeout|timed out/i.test(err.message)
+              ? `Screen ${i + 1} timed out — click Generate again or edit that screen.`
+              : `Failed screen ${i + 1}`;
         toast.error(message);
       }
     }
@@ -191,20 +201,25 @@ export default function ProjectCanvasPage() {
       setLoading(true);
       setLoadingMessage("Generating new screen...");
       try {
-        const { data } = await axios.post("/api/generate-screen-ui", {
-          projectId,
-          screenId: screen.screenId,
-          screenName: screen.screenName,
-          purpose: screen.purpose,
-          screenDescription: screen.screenDescription,
-          projectVisualDescription: projectDetail?.projectVisualDescription,
-          device: projectDetail?.device,
-        });
+        const data = await postWithRetry<ScreenConfig>(
+          "/api/generate-screen-ui",
+          {
+            projectId,
+            screenId: screen.screenId,
+            screenName: screen.screenName,
+            purpose: screen.purpose,
+            screenDescription: screen.screenDescription,
+            projectVisualDescription: projectDetail?.projectVisualDescription,
+            device: projectDetail?.device,
+          }
+        );
         setScreenConfig((prev) =>
           prev.map((s) =>
             s.screenId === screen.screenId ? data : s
           )
         );
+      } catch {
+        toast.error("New screen generation failed — try Edit on that screen to retry.");
       } finally {
         setLoading(false);
       }

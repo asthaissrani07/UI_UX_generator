@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, type ReactNode } from "react";
 import { wrapScreenHtml } from "@/lib/iframe-html";
+import { sanitizeScreenHtml } from "@/lib/sanitize-screen-html";
 import { MOBILE_CHROME, DESKTOP_CHROME } from "@/lib/canvas-layout";
 import { useSmoothDrag } from "@/hooks/use-smooth-drag";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -68,7 +69,12 @@ export default function ScreenFrame({
   const applyThemeToIframe = useCallback(() => {
     const iframe = iframeRef.current;
     if (!iframe || !screen.code) return;
-    iframe.srcdoc = wrapScreenHtml(screen.code, theme, viewportH, safeW);
+    iframe.srcdoc = wrapScreenHtml(
+      sanitizeScreenHtml(screen.code),
+      theme,
+      viewportH,
+      safeW
+    );
   }, [screen.code, theme, viewportH, safeW]);
 
   useEffect(() => {
@@ -121,7 +127,12 @@ export default function ScreenFrame({
     );
   }
 
-  const srcDoc = wrapScreenHtml(screen.code, theme, viewportH, safeW);
+  const srcDoc = wrapScreenHtml(
+    sanitizeScreenHtml(screen.code),
+    theme,
+    viewportH,
+    safeW
+  );
 
   return frameShell(
     <>

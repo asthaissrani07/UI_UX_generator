@@ -10,10 +10,11 @@ import {
   cleanScreenHtml,
   isScreenCodeComplete,
 } from "@/lib/validate-screen-html";
+import { sanitizeScreenHtml } from "@/lib/sanitize-screen-html";
 
 export const maxDuration = 60;
 
-const SCREEN_MAX_TOKENS = 8192;
+const SCREEN_MAX_TOKENS = 6144;
 
 async function generateScreenCode(
   systemPrompt: string,
@@ -78,13 +79,15 @@ export async function POST(req: NextRequest) {
     const systemPrompt = editPrompt ? EDIT_SCREEN_PROMPT : GENERATE_SCREEN_PROMPT;
 
     let code = await generateScreenCode(systemPrompt, userContent);
+    code = sanitizeScreenHtml(code);
 
     if (!isScreenCodeComplete(code)) {
-      code = await generateScreenCode(
+      const retryCode = await generateScreenCode(
         systemPrompt,
         userContent,
         "Your previous response was incomplete or too short. Regenerate the FULL screen HTML with header, main sections, cards/lists/buttons as described. One complete screen — do not truncate."
       );
+      code = sanitizeScreenHtml(retryCode);
     }
 
     if (!isScreenCodeComplete(code)) {
