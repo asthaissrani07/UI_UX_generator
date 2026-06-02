@@ -4,35 +4,19 @@ import { and, eq } from "drizzle-orm";
 import { getDb } from "@/config/db";
 import { screenConfigTable } from "@/config/schema";
 import { GENERATE_SCREEN_PROMPT, EDIT_SCREEN_PROMPT } from "@/data/prompts";
+import { HOBBY_REQUEST_TIMEOUT_MS } from "@/config/models";
 import { getMissingServerEnv } from "@/lib/app-url";
-import { formatServerError, openRouterChat } from "@/lib/openrouter-chat";
 import {
-  cleanScreenHtml,
-  isScreenCodeComplete,
-} from "@/lib/validate-screen-html";
+  formatServerError,
+  openRouterChatForAttempt,
+} from "@/lib/openrouter-chat";
+import { cleanScreenHtml, isScreenCodeComplete } from "@/lib/validate-screen-html";
 import { sanitizeScreenHtml } from "@/lib/sanitize-screen-html";
 
 export const maxDuration = 60;
 
-const SCREEN_MAX_TOKENS = 6144;
-
-async function generateScreenCode(
-  systemPrompt: string,
-  userContent: string,
-  retryHint?: string
-): Promise<string> {
-  const messages: Array<{ role: "system" | "user"; content: string }> = [
-    { role: "system", content: systemPrompt },
-    { role: "user", content: userContent },
-  ];
-
-  if (retryHint) {
-    messages.push({ role: "user", content: retryHint });
-  }
-
-  const raw = await openRouterChat(messages, undefined, SCREEN_MAX_TOKENS);
-  return cleanScreenHtml(raw);
-}
+/** Keep low for speed on Vercel Hobby (~10s total per request). */
+const SCREEN_MAX_TOKENS = 3200;
 
 export async function POST(req: NextRequest) {
   try {
@@ -63,6 +47,7 @@ export async function POST(req: NextRequest) {
       projectVisualDescription,
       device,
       editPrompt,
+      modelAttempt = 0,
     } = body;
 
     if (!projectId || !screenId) {
@@ -78,23 +63,24 @@ export async function POST(req: NextRequest) {
 
     const systemPrompt = editPrompt ? EDIT_SCREEN_PROMPT : GENERATE_SCREEN_PROMPT;
 
-    let code = await generateScreenCode(systemPrompt, userContent);
-    code = sanitizeScreenHtml(code);
+    const { text: raw, model } = await openRouterChatForAttempt(
+      [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userContent },
+      ],
+      Number(modelAttempt) || 0,
+      SCREEN_MAX_TOKENS,
+      HOBBY_REQUEST_TIMEOUT_MS
+    );
 
-    if (!isScreenCodeComplete(code)) {
-      const retryCode = await generateScreenCode(
-        systemPrompt,
-        userContent,
-        "Your previous response was incomplete or too short. Regenerate the FULL screen HTML with header, main sections, cards/lists/buttons as described. One complete screen — do not truncate."
-      );
-      code = sanitizeScreenHtml(retryCode);
-    }
+    let code = sanitizeScreenHtml(cleanScreenHtml(raw));
 
     if (!isScreenCodeComplete(code)) {
       return NextResponse.json(
         {
-          message:
-            "AI returned incomplete screen HTML. Try again or switch OPENROUTER_MODEL to qwen/qwen3-coder:free.",
+          message: `Incomplete HTML from ${model}. Retry will use the next free model.`,
+          model,
+          incomplete: true,
         },
         { status: 502 }
       );
@@ -121,14 +107,11 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(updated);
   } catch (e) {
     console.error("generate-screen-ui error:", e);
-    return NextResponse.json(
-      {
-        message: formatServerError(e).replace(
-          "Config generation",
-          "Screen generation"
-        ),
-      },
-      { status: 500 }
+    const message = formatServerError(e).replace(
+      "Config generation",
+      "Screen generation"
     );
+    const status = /timeout|504|timed out/i.test(message) ? 504 : 500;
+    return NextResponse.json({ message }, { status });
   }
 }

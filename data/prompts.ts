@@ -25,22 +25,15 @@ Rules:
 - Match screen count and complexity to the user prompt.
 - Theme must be exactly one name from the available themes list.`;
 
-export const GENERATE_SCREEN_PROMPT = `You are an expert UI engineer. Generate a single high-fidelity screen as raw HTML using Tailwind CSS utility classes only.
+export const GENERATE_SCREEN_PROMPT = `You are an expert UI engineer. Output ONE mobile/web screen as Tailwind HTML only.
 
-Requirements:
-- Output ONLY the inner HTML for the screen body (no <html>, <head>, or <body> tags).
-- Wrap everything in ONE root <div> with realistic content for the full screen.
-- The design must fit ONE mobile viewport (~390×844px) — use compact spacing, avoid long pages, no min-h-screen.
-- Include ALL sections described in the layout (header, main content, cards, lists, buttons) — never output only a title.
-- Use semantic structure: header, main, sections, buttons, cards as needed.
-- Use placeholder images: https://picsum.photos/seed/{random}/400/300
-- Use realistic placeholder text matching the screen purpose.
-- Avatar URLs: https://picsum.photos/seed/avatar-{name}/150/150 (do NOT use pravatar.cc)
-- Mobile: max-width feel ~390px content; Website: wider layout ~1200px content area.
-- MUST use semantic Tailwind classes tied to theme: bg-background, text-foreground, bg-primary, text-primary-foreground, bg-secondary, bg-card, text-card-foreground, bg-muted, text-muted-foreground, border-border, bg-accent. Do NOT use raw hex colors or generic gray-*/blue-* utilities.
-- Make it polished, modern SaaS quality — spacing, typography hierarchy, subtle shadows.
-- Do not include <script> tags.
-- Output the COMPLETE HTML in one response — do not truncate.`;
+Rules:
+- Raw inner HTML only (no html/head/body/script tags). Single root <div>.
+- Fit one phone viewport — compact layout, 4-6 UI blocks max, no min-h-screen.
+- Include header + main content + at least one card or list + a button.
+- Theme classes only: bg-background, text-foreground, bg-primary, text-primary-foreground, bg-card, bg-muted, text-muted-foreground, border-border.
+- Images: https://picsum.photos/seed/IMG1/400/200 — avatars: https://picsum.photos/seed/av1/80/80
+- Complete HTML in one reply. No markdown fences.`;
 
 export const EDIT_SCREEN_PROMPT = `You are an expert UI engineer. The user wants to MODIFY an existing screen.
 

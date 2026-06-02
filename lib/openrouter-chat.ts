@@ -2,10 +2,12 @@ import { getAppUrl } from "@/lib/app-url";
 import { extractMessageText } from "@/lib/ai-content";
 import {
   DEFAULT_AI_MODEL,
+  HOBBY_REQUEST_TIMEOUT_MS,
   getModelChain,
   isModelNotFoundError,
   isRateLimitError,
   isRetryableModelError,
+  pickModelForAttempt,
 } from "@/config/models";
 
 export const AI_MODEL =
@@ -16,35 +18,60 @@ type ChatMessage = {
   content: string;
 };
 
-async function openRouterChatOnce(
+type ChatOnceOptions = {
+  maxTokens?: number;
+  timeoutMs?: number;
+};
+
+export async function openRouterChatOnce(
   messages: ChatMessage[],
   model: string,
-  maxTokens: number
+  options: ChatOnceOptions = {}
 ): Promise<string> {
+  const maxTokens = options.maxTokens ?? 4096;
+  const timeoutMs = options.timeoutMs ?? HOBBY_REQUEST_TIMEOUT_MS;
+
   const apiKey = process.env.OPENROUTER_API_KEY;
   if (!apiKey) {
     throw new Error("OPENROUTER_API_KEY is not set");
   }
 
-  const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-      "HTTP-Referer": getAppUrl(),
-      "X-Title": "UIUX Mock Generator",
-    },
-    body: JSON.stringify({
-      model,
-      messages,
-      stream: false,
-      max_tokens: maxTokens,
-    }),
-  });
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+
+  let res: Response;
+  try {
+    res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+      method: "POST",
+      signal: controller.signal,
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+        "HTTP-Referer": getAppUrl(),
+        "X-Title": "UIUX Mock Generator",
+      },
+      body: JSON.stringify({
+        model,
+        messages,
+        stream: false,
+        max_tokens: maxTokens,
+      }),
+    });
+  } catch (e) {
+    if (e instanceof Error && e.name === "AbortError") {
+      throw new Error(`OpenRouter timeout (${model}) after ${timeoutMs}ms`);
+    }
+    throw e;
+  } finally {
+    clearTimeout(timer);
+  }
 
   const body = (await res.json()) as {
     error?: { message?: string; code?: number };
-    choices?: Array<{ message?: { content?: string | unknown[] } }>;
+    choices?: Array<{
+      message?: { content?: string | unknown[] };
+      finish_reason?: string;
+    }>;
   };
 
   const detail = body.error?.message ?? res.statusText;
@@ -66,39 +93,53 @@ async function openRouterChatOnce(
   }
 
   if (body.error?.message) {
-    if (isRateLimitError(body.error.message)) {
-      throw new Error(`OpenRouter rate limit (${model}): ${body.error.message}`);
-    }
-    if (isModelNotFoundError(body.error.message)) {
-      throw new Error(`OpenRouter model not found (${model}): ${body.error.message}`);
-    }
-    throw new Error(`OpenRouter error: ${body.error.message}`);
+    throw new Error(`OpenRouter error (${model}): ${body.error.message}`);
   }
 
-  const text = extractMessageText(body.choices?.[0]?.message?.content).trim();
+  const choice = body.choices?.[0];
+  const text = extractMessageText(choice?.message?.content).trim();
+
   if (!text) {
-    throw new Error("OpenRouter returned an empty response");
+    const reason = choice?.finish_reason ?? "unknown";
+    throw new Error(
+      `OpenRouter returned an empty response (${model}, finish: ${reason})`
+    );
   }
 
   return text;
 }
 
-/** Tries primary model, then free fallbacks when rate-limited. */
+/** One model per call — use modelAttempt on client to rotate (fits Vercel Hobby 10s). */
+export async function openRouterChatForAttempt(
+  messages: ChatMessage[],
+  modelAttempt = 0,
+  maxTokens = 4096,
+  timeoutMs = HOBBY_REQUEST_TIMEOUT_MS
+): Promise<{ text: string; model: string }> {
+  const model = pickModelForAttempt(modelAttempt);
+  const text = await openRouterChatOnce(messages, model, { maxTokens, timeoutMs });
+  return { text, model };
+}
+
+/** Full chain in one request — only for config / local dev with long timeouts. */
 export async function openRouterChat(
   messages: ChatMessage[],
   model = AI_MODEL,
-  maxTokens = 8192
+  maxTokens = 4096
 ): Promise<string> {
   const chain = getModelChain(model);
   let lastError: Error | null = null;
 
-  for (const candidate of chain) {
+  for (const candidate of chain.slice(0, 3)) {
     try {
-      return await openRouterChatOnce(messages, candidate, maxTokens);
+      return await openRouterChatOnce(messages, candidate, {
+        maxTokens,
+        timeoutMs: HOBBY_REQUEST_TIMEOUT_MS,
+      });
     } catch (e) {
       const errMsg = e instanceof Error ? e.message : String(e);
       if (isRetryableModelError(errMsg) && chain.indexOf(candidate) < chain.length - 1) {
-        console.warn(`[OpenRouter] ${candidate} unavailable — trying next model`);
+        console.warn(`[OpenRouter] ${candidate} failed: ${errMsg}`);
         lastError = e instanceof Error ? e : new Error(errMsg);
         continue;
       }
@@ -109,7 +150,7 @@ export async function openRouterChat(
   throw (
     lastError ??
     new Error(
-      "All free models are rate-limited. Wait an hour, switch OPENROUTER_MODEL, or add $5 credits at openrouter.ai"
+      "All AI models failed. Wait and retry, or add $5 OpenRouter credits (openai/gpt-4o-mini)."
     )
   );
 }
@@ -131,8 +172,11 @@ export function formatServerError(e: unknown): string {
   if (/402|credits exhausted|insufficient/i.test(errMsg)) {
     return "OpenRouter credits exhausted. Add ~$5 at openrouter.ai/settings/credits and set OPENROUTER_MODEL=openai/gpt-4o-mini";
   }
-  if (isRateLimitError(errMsg) || /All free models are rate-limited/i.test(errMsg)) {
-    return "Free AI limit reached on all fallback models. Wait 1–2 hours, set OPENROUTER_MODEL=qwen/qwen3-coder:free, or add $5 OpenRouter credits for gpt-4o-mini.";
+  if (/empty response/i.test(errMsg)) {
+    return "AI returned empty output — auto-retrying with another model usually fixes this.";
+  }
+  if (isRateLimitError(errMsg) || /All AI models failed/i.test(errMsg)) {
+    return "Free AI limit reached. Wait 1–2 hours, or add $5 OpenRouter credits for gpt-4o-mini.";
   }
   if (/DATABASE_URL|connection|ECONNREFUSED/i.test(errMsg)) {
     return "Database connection failed. Check DATABASE_URL on Vercel.";
@@ -141,17 +185,17 @@ export function formatServerError(e: unknown): string {
     return "Database tables missing. Run npm run db:push on production DATABASE_URL.";
   }
   if (/timeout|ETIMEDOUT|FUNCTION_INVOCATION_TIMEOUT|504|Gateway Timeout/i.test(errMsg)) {
-    return "AI request timed out. Vercel Hobby limits functions to ~10s — retrying usually works, or upgrade Vercel Pro for 60s timeouts.";
+    return "Request timed out (Vercel Hobby ≈10s limit). Retrying automatically — or upgrade Vercel Pro for 60s.";
   }
   if (/value too long|character varying/i.test(errMsg)) {
     return "Database field limit exceeded. Retry — this build truncates long values.";
   }
   if (/404|No endpoints found|model not found/i.test(errMsg)) {
-    return `Invalid OPENROUTER_MODEL on Vercel. Set exactly: qwen/qwen3-coder:free (no quotes, no spaces). Old IDs like google/gemma-3-27b-it:free no longer work.`;
+    return "Invalid OPENROUTER_MODEL. Try: meta-llama/llama-3.2-3b-instruct:free or qwen/qwen3-coder:free";
   }
-  if (errMsg.includes("OpenRouter error")) {
-    return errMsg;
+  if (errMsg.includes("OpenRouter")) {
+    return errMsg.slice(0, 220);
   }
 
-  return `Config generation failed: ${errMsg.slice(0, 180)}`;
+  return `Generation failed: ${errMsg.slice(0, 180)}`;
 }

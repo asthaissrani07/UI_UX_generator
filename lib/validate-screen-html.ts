@@ -1,4 +1,4 @@
-const MIN_SCREEN_CODE_LENGTH = 180;
+const MIN_SCREEN_CODE_LENGTH = 120;
 
 export function cleanScreenHtml(raw: string): string {
   return raw.replace(/^```html?\s*/i, "").replace(/```\s*$/i, "").trim();

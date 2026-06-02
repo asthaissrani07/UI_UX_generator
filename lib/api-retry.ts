@@ -10,34 +10,37 @@ type RetryOptions = {
   timeoutMs?: number;
 };
 
-/** Retries POST on gateway timeouts — common on Vercel Hobby (10s limit). */
-export async function postWithRetry<T>(
+type RequestPayload = Record<string, unknown>;
+
+/** Retries with modelAttempt 0,1,2… so each call uses a different AI model. */
+export async function postGenerateWithModelRotation<T>(
   url: string,
-  data: unknown,
+  buildPayload: (modelAttempt: number) => RequestPayload,
   options: RetryOptions = {}
 ): Promise<T> {
-  const maxAttempts = options.maxAttempts ?? 3;
-  const retryStatuses = options.retryStatuses ?? [502, 503, 504];
-  const timeoutMs = options.timeoutMs ?? 120_000;
+  const maxAttempts = options.maxAttempts ?? 5;
+  const retryStatuses = options.retryStatuses ?? [500, 502, 503, 504];
+  const timeoutMs = options.timeoutMs ?? 25_000;
 
   let lastError: unknown;
 
-  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
     try {
-      const { data: result } = await axios.post<T>(url, data, {
+      const { data } = await axios.post<T>(url, buildPayload(attempt), {
         timeout: timeoutMs,
       });
-      return result;
+      return data;
     } catch (err) {
       lastError = err;
       const status = axios.isAxiosError(err) ? err.response?.status : undefined;
       const canRetry =
-        attempt < maxAttempts &&
+        attempt < maxAttempts - 1 &&
         (retryStatuses.includes(status ?? 0) ||
-          (axios.isAxiosError(err) && err.code === "ECONNABORTED"));
+          (axios.isAxiosError(err) &&
+            (err.code === "ECONNABORTED" || err.code === "ERR_NETWORK")));
 
       if (canRetry) {
-        await sleep(2500 * attempt);
+        await sleep(1500 + attempt * 1000);
         continue;
       }
       throw err;
@@ -45,4 +48,17 @@ export async function postWithRetry<T>(
   }
 
   throw lastError;
+}
+
+/** Simple POST retry (same payload every time). */
+export async function postWithRetry<T>(
+  url: string,
+  data: unknown,
+  options: RetryOptions = {}
+): Promise<T> {
+  return postGenerateWithModelRotation<T>(url, () =>
+    typeof data === "object" && data !== null
+      ? (data as RequestPayload)
+      : { data }
+  , options);
 }

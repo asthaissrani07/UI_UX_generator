@@ -7,7 +7,8 @@ import { APP_LAYOUT_CONFIG_PROMPT } from "@/data/prompts";
 import { THEME_LIST } from "@/data/themes";
 import { parseLayoutConfig } from "@/lib/parse-layout-json";
 import { getMissingServerEnv } from "@/lib/app-url";
-import { formatServerError, openRouterChat } from "@/lib/openrouter-chat";
+import { formatServerError, openRouterChatForAttempt } from "@/lib/openrouter-chat";
+import { HOBBY_REQUEST_TIMEOUT_MS } from "@/config/models";
 
 function resolveTheme(name: string | undefined): string {
   if (!name) return "Polar Mint";
@@ -47,7 +48,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
     }
 
-    const { userInput, device, projectId } = await req.json();
+    const { userInput, device, projectId, modelAttempt = 0 } = await req.json();
 
     if (!projectId || !userInput?.trim()) {
       return NextResponse.json(
@@ -62,13 +63,18 @@ export async function POST(req: NextRequest) {
       deviceType
     );
 
-    const raw = await openRouterChat([
-      { role: "system", content: systemPrompt },
-      {
-        role: "user",
-        content: `Product idea: ${userInput}\n\nDevice type: ${deviceType}`,
-      },
-    ]);
+    const { text: raw } = await openRouterChatForAttempt(
+      [
+        { role: "system", content: systemPrompt },
+        {
+          role: "user",
+          content: `Product idea: ${userInput}\n\nDevice type: ${deviceType}`,
+        },
+      ],
+      Number(modelAttempt) || 0,
+      2048,
+      HOBBY_REQUEST_TIMEOUT_MS
+    );
 
     let parsed;
     try {

@@ -17,7 +17,7 @@ import {
 } from "@/lib/capture-screenshot";
 import type { ProjectType, ScreenConfig } from "@/types";
 import { isScreenCodeComplete } from "@/lib/validate-screen-html";
-import { postWithRetry } from "@/lib/api-retry";
+import { postGenerateWithModelRotation } from "@/lib/api-retry";
 
 export default function ProjectCanvasPage() {
   const { projectId } = useParams<{ projectId: string }>();
@@ -46,11 +46,12 @@ export default function ProjectCanvasPage() {
       setLoading(true);
       setLoadingMessage("Generating screen configuration...");
       try {
-        await axios.post("/api/generate-config", {
+        await postGenerateWithModelRotation("/api/generate-config", (modelAttempt) => ({
           projectId,
           userInput: detail.userInput,
           device: detail.device,
-        });
+          modelAttempt,
+        }));
         await fetchProject();
       } catch (err) {
         const message =
@@ -78,9 +79,9 @@ export default function ProjectCanvasPage() {
         if (i > 0) {
           await new Promise((r) => setTimeout(r, 1500));
         }
-        const data = await postWithRetry<ScreenConfig>(
+        const data = await postGenerateWithModelRotation<ScreenConfig>(
           "/api/generate-screen-ui",
-          {
+          (modelAttempt) => ({
             projectId,
             screenId: screen.screenId,
             screenName: screen.screenName,
@@ -88,7 +89,8 @@ export default function ProjectCanvasPage() {
             screenDescription: screen.screenDescription,
             projectVisualDescription: projectDetail.projectVisualDescription,
             device: projectDetail.device,
-          }
+            modelAttempt,
+          })
         );
         setScreenConfig((prev) =>
           prev.map((item, idx) => (idx === i ? data : item))
@@ -201,9 +203,9 @@ export default function ProjectCanvasPage() {
       setLoading(true);
       setLoadingMessage("Generating new screen...");
       try {
-        const data = await postWithRetry<ScreenConfig>(
+        const data = await postGenerateWithModelRotation<ScreenConfig>(
           "/api/generate-screen-ui",
-          {
+          (modelAttempt) => ({
             projectId,
             screenId: screen.screenId,
             screenName: screen.screenName,
@@ -211,7 +213,8 @@ export default function ProjectCanvasPage() {
             screenDescription: screen.screenDescription,
             projectVisualDescription: projectDetail?.projectVisualDescription,
             device: projectDetail?.device,
-          }
+            modelAttempt,
+          })
         );
         setScreenConfig((prev) =>
           prev.map((s) =>
