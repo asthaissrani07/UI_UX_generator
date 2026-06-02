@@ -7,7 +7,7 @@ import { APP_LAYOUT_CONFIG_PROMPT } from "@/data/prompts";
 import { THEME_LIST } from "@/data/themes";
 import { parseLayoutConfig } from "@/lib/parse-layout-json";
 import { getMissingServerEnv } from "@/lib/app-url";
-import { formatServerError, openRouterChatForAttempt } from "@/lib/openrouter-chat";
+import { aiChatForAttempt, formatServerError } from "@/lib/ai-chat";
 import { HOBBY_REQUEST_TIMEOUT_MS } from "@/config/models";
 
 function resolveTheme(name: string | undefined): string {
@@ -63,7 +63,7 @@ export async function POST(req: NextRequest) {
       deviceType
     );
 
-    const { text: raw } = await openRouterChatForAttempt(
+    const { text: raw } = await aiChatForAttempt(
       [
         { role: "system", content: systemPrompt },
         {

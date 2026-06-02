@@ -12,7 +12,9 @@ export function getAppUrl(): string {
 export function getMissingServerEnv(): string[] {
   const missing: string[] = [];
   if (!process.env.DATABASE_URL) missing.push("DATABASE_URL");
-  if (!process.env.OPENROUTER_API_KEY) missing.push("OPENROUTER_API_KEY");
+  if (!process.env.OPENROUTER_API_KEY && !process.env.GEMINI_API_KEY) {
+    missing.push("OPENROUTER_API_KEY or GEMINI_API_KEY");
+  }
   if (!process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY) {
     missing.push("NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY");
   }

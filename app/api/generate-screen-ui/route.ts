@@ -7,9 +7,9 @@ import { GENERATE_SCREEN_PROMPT, EDIT_SCREEN_PROMPT } from "@/data/prompts";
 import { HOBBY_REQUEST_TIMEOUT_MS } from "@/config/models";
 import { getMissingServerEnv } from "@/lib/app-url";
 import {
+  aiChatForAttempt,
   formatServerError,
-  openRouterChatForAttempt,
-} from "@/lib/openrouter-chat";
+} from "@/lib/ai-chat";
 import { cleanScreenHtml, isScreenCodeComplete } from "@/lib/validate-screen-html";
 import { sanitizeScreenHtml } from "@/lib/sanitize-screen-html";
 
@@ -63,7 +63,7 @@ export async function POST(req: NextRequest) {
 
     const systemPrompt = editPrompt ? EDIT_SCREEN_PROMPT : GENERATE_SCREEN_PROMPT;
 
-    const { text: raw, model } = await openRouterChatForAttempt(
+    const { text: raw, model } = await aiChatForAttempt(
       [
         { role: "system", content: systemPrompt },
         { role: "user", content: userContent },
