@@ -1,9 +1,15 @@
 import { getAppUrl } from "@/lib/app-url";
 import { extractMessageText } from "@/lib/ai-content";
-import { getModelChain, isRateLimitError } from "@/config/models";
+import {
+  DEFAULT_AI_MODEL,
+  getModelChain,
+  isModelNotFoundError,
+  isRateLimitError,
+  isRetryableModelError,
+} from "@/config/models";
 
 export const AI_MODEL =
-  process.env.OPENROUTER_MODEL ?? "openrouter/free";
+  process.env.OPENROUTER_MODEL?.trim() || DEFAULT_AI_MODEL;
 
 type ChatMessage = {
   role: "system" | "user" | "assistant";
@@ -53,12 +59,18 @@ async function openRouterChatOnce(
     if (res.status === 429 || isRateLimitError(detail)) {
       throw new Error(`OpenRouter rate limit (${model}): ${detail}`);
     }
+    if (res.status === 404 || isModelNotFoundError(detail)) {
+      throw new Error(`OpenRouter model not found (${model}): ${detail}`);
+    }
     throw new Error(`OpenRouter error (${res.status}): ${detail}`);
   }
 
   if (body.error?.message) {
     if (isRateLimitError(body.error.message)) {
       throw new Error(`OpenRouter rate limit (${model}): ${body.error.message}`);
+    }
+    if (isModelNotFoundError(body.error.message)) {
+      throw new Error(`OpenRouter model not found (${model}): ${body.error.message}`);
     }
     throw new Error(`OpenRouter error: ${body.error.message}`);
   }
@@ -85,8 +97,8 @@ export async function openRouterChat(
       return await openRouterChatOnce(messages, candidate, maxTokens);
     } catch (e) {
       const errMsg = e instanceof Error ? e.message : String(e);
-      if (isRateLimitError(errMsg) && chain.indexOf(candidate) < chain.length - 1) {
-        console.warn(`[OpenRouter] ${candidate} limited — trying next model`);
+      if (isRetryableModelError(errMsg) && chain.indexOf(candidate) < chain.length - 1) {
+        console.warn(`[OpenRouter] ${candidate} unavailable — trying next model`);
         lastError = e instanceof Error ? e : new Error(errMsg);
         continue;
       }
@@ -134,8 +146,8 @@ export function formatServerError(e: unknown): string {
   if (/value too long|character varying/i.test(errMsg)) {
     return "Database field limit exceeded. Retry — this build truncates long values.";
   }
-  if (/404|No endpoints found/i.test(errMsg)) {
-    return "Model not found on OpenRouter. Set OPENROUTER_MODEL to qwen/qwen3-coder:free on Vercel.";
+  if (/404|No endpoints found|model not found/i.test(errMsg)) {
+    return `Invalid OPENROUTER_MODEL on Vercel. Set exactly: qwen/qwen3-coder:free (no quotes, no spaces). Old IDs like google/gemma-3-27b-it:free no longer work.`;
   }
   if (errMsg.includes("OpenRouter error")) {
     return errMsg;
