@@ -48,8 +48,12 @@ export default function ProjectCanvasPage() {
           device: detail.device,
         });
         await fetchProject();
-      } catch {
-        toast.error("Config generation failed");
+      } catch (err) {
+        const message =
+          axios.isAxiosError(err) && err.response?.data?.message
+            ? String(err.response.data.message)
+            : "Config generation failed";
+        toast.error(message);
       } finally {
         setLoading(false);
       }
@@ -79,8 +83,12 @@ export default function ProjectCanvasPage() {
         setScreenConfig((prev) =>
           prev.map((item, idx) => (idx === i ? data : item))
         );
-      } catch {
-        toast.error(`Failed screen ${i + 1}`);
+      } catch (err) {
+        const message =
+          axios.isAxiosError(err) && err.response?.data?.message
+            ? String(err.response.data.message)
+            : `Failed screen ${i + 1}`;
+        toast.error(message);
       }
     }
 
