@@ -1,3 +1,4 @@
+import { env, getAiProvider, hasGeminiKey, hasOpenRouterKey } from "@/lib/app-url";
 import { HOBBY_REQUEST_TIMEOUT_MS, isRetryableModelError } from "@/config/models";
 import { geminiChat, getGeminiModelLabel } from "@/lib/gemini-chat";
 import {
@@ -10,14 +11,8 @@ export type ChatMessage = {
   content: string;
 };
 
-function getProvider(): "openrouter" | "gemini" | "auto" {
-  const p = (process.env.AI_PROVIDER ?? "auto").trim().toLowerCase();
-  if (p === "gemini" || p === "openrouter") return p;
-  return "auto";
-}
-
 export function hasAiProvider(): boolean {
-  return Boolean(process.env.OPENROUTER_API_KEY || process.env.GEMINI_API_KEY);
+  return hasOpenRouterKey() || hasGeminiKey();
 }
 
 /** One AI call per HTTP request — OpenRouter with Gemini fallback. */
@@ -27,28 +22,36 @@ export async function aiChatForAttempt(
   maxTokens = 4096,
   timeoutMs = HOBBY_REQUEST_TIMEOUT_MS
 ): Promise<{ text: string; model: string }> {
-  const provider = getProvider();
-  const hasGemini = Boolean(process.env.GEMINI_API_KEY);
-  const hasOpenRouter = Boolean(process.env.OPENROUTER_API_KEY);
+  const provider = getAiProvider();
 
   if (provider === "gemini") {
+    if (!hasGeminiKey()) {
+      throw new Error(
+        "GEMINI_API_KEY is not set. Add it in Vercel → Environment Variables (aistudio.google.com/apikey)"
+      );
+    }
     const text = await geminiChat(messages, { maxTokens, timeoutMs });
     return { text, model: getGeminiModelLabel() };
   }
 
-  if (provider === "openrouter" || !hasGemini) {
+  if (provider === "openrouter") {
     return openRouterChatForAttempt(messages, modelAttempt, maxTokens, timeoutMs);
   }
 
-  // auto: after 2 OpenRouter attempts, switch to Gemini for this screen
-  if (hasGemini && modelAttempt >= 2) {
+  // auto mode
+  if (hasGeminiKey() && modelAttempt >= 2) {
     const text = await geminiChat(messages, { maxTokens, timeoutMs });
     return { text, model: getGeminiModelLabel() };
   }
 
-  if (!hasOpenRouter && hasGemini) {
-    const text = await geminiChat(messages, { maxTokens, timeoutMs });
-    return { text, model: getGeminiModelLabel() };
+  if (!hasOpenRouterKey()) {
+    if (hasGeminiKey()) {
+      const text = await geminiChat(messages, { maxTokens, timeoutMs });
+      return { text, model: getGeminiModelLabel() };
+    }
+    throw new Error(
+      "No AI key configured. Add GEMINI_API_KEY on Vercel (free at aistudio.google.com/apikey)"
+    );
   }
 
   try {
@@ -60,7 +63,7 @@ export async function aiChatForAttempt(
     );
   } catch (e) {
     const errMsg = e instanceof Error ? e.message : String(e);
-    if (hasGemini && isRetryableModelError(errMsg)) {
+    if (hasGeminiKey() && isRetryableModelError(errMsg)) {
       console.warn("[AI] OpenRouter failed, using Gemini:", errMsg.slice(0, 120));
       const text = await geminiChat(messages, { maxTokens, timeoutMs });
       return { text, model: getGeminiModelLabel() };

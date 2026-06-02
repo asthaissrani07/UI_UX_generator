@@ -17,7 +17,7 @@ export async function geminiChat(
   messages: ChatMessage[],
   options: GeminiOptions = {}
 ): Promise<string> {
-  const apiKey = process.env.GEMINI_API_KEY;
+  const apiKey = process.env.GEMINI_API_KEY?.trim();
   if (!apiKey) {
     throw new Error("GEMINI_API_KEY is not set");
   }

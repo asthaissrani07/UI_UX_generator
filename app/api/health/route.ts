@@ -1,38 +1,37 @@
 import { NextResponse } from "next/server";
-import { getMissingServerEnv } from "@/lib/app-url";
+import {
+  getAiProvider,
+  getMissingServerEnv,
+  hasGeminiKey,
+  hasOpenRouterKey,
+} from "@/lib/app-url";
 import { AI_MODEL } from "@/lib/openrouter-chat";
 import { getGeminiModelLabel } from "@/lib/gemini-chat";
 
 /** Deployment sanity check — shows which env vars are missing (no secret values). */
 export async function GET() {
   const missing = getMissingServerEnv();
-  const aiProvider = process.env.AI_PROVIDER?.trim() || "auto";
-  const hasGemini = Boolean(process.env.GEMINI_API_KEY);
-  const hasOpenRouter = Boolean(process.env.OPENROUTER_API_KEY);
+  const aiProvider = getAiProvider();
 
   return NextResponse.json({
     ok: missing.length === 0,
     missing,
     aiProvider,
-    hasGemini,
-    hasOpenRouter,
-    openRouterModel: hasOpenRouter
+    hasGemini: hasGeminiKey(),
+    hasOpenRouter: hasOpenRouterKey(),
+    openRouterModel: hasOpenRouterKey()
       ? process.env.OPENROUTER_MODEL?.trim() || `(default) ${AI_MODEL}`
       : null,
-    geminiModel: hasGemini ? getGeminiModelLabel() : null,
+    geminiModel: hasGeminiKey() ? getGeminiModelLabel() : null,
     hints:
       missing.length > 0
         ? [
-            "Add OPENROUTER_API_KEY and/or GEMINI_API_KEY (Gemini is free at aistudio.google.com/apikey)",
-            "Redeploy after saving env vars",
+            "Add GEMINI_API_KEY at aistudio.google.com/apikey (free, no OpenRouter needed)",
+            "Set AI_PROVIDER=gemini if using Gemini only",
+            "Enable for Production + Preview in Vercel, then Redeploy",
           ]
-        : hasGemini
-          ? [
-              "Gemini fallback active — works when OpenRouter free limit is hit",
-              "Set AI_PROVIDER=gemini to use only Gemini",
-            ]
-          : [
-              "OpenRouter free limit hit? Add GEMINI_API_KEY from aistudio.google.com/apikey",
-            ],
+        : hasGeminiKey()
+          ? ["AI configured — Gemini active"]
+          : ["OpenRouter active — add GEMINI_API_KEY as free backup"],
   });
 }

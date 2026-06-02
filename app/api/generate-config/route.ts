@@ -35,7 +35,7 @@ export async function POST(req: NextRequest) {
     if (missing.length > 0) {
       return NextResponse.json(
         {
-          message: `Server misconfigured. Missing: ${missing.join(", ")}`,
+          message: `Server misconfigured. Missing: ${missing.join(", ")}. Add GEMINI_API_KEY (free) at aistudio.google.com/apikey`,
           missing,
         },
         { status: 503 }
