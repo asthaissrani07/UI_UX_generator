@@ -1,4 +1,3 @@
-/** Base URL for OpenRouter referer header (required for production API calls). */
 export function getAppUrl(): string {
   if (process.env.NEXT_PUBLIC_APP_URL) {
     return process.env.NEXT_PUBLIC_APP_URL.replace(/\/$/, "");
@@ -10,13 +9,15 @@ export function getAppUrl(): string {
 }
 
 export function env(name: string): string | undefined {
-  const value = process.env[name]?.trim();
-  return value || undefined;
+  const v = process.env[name]?.trim();
+  return v || undefined;
 }
 
-export function getAiProvider(): "auto" | "openrouter" | "gemini" {
+export type AiProvider = "groq" | "gemini" | "openrouter" | "auto";
+
+export function getAiProvider(): AiProvider {
   const p = (env("AI_PROVIDER") ?? "auto").toLowerCase();
-  if (p === "gemini" || p === "openrouter") return p;
+  if (p === "groq" || p === "gemini" || p === "openrouter") return p;
   return "auto";
 }
 
@@ -28,26 +29,24 @@ export function hasGeminiKey(): boolean {
   return Boolean(env("GEMINI_API_KEY"));
 }
 
+export function hasGroqKey(): boolean {
+  return Boolean(env("GROQ_API_KEY"));
+}
+
 export function getMissingServerEnv(): string[] {
   const missing: string[] = [];
   const provider = getAiProvider();
 
   if (!env("DATABASE_URL")) missing.push("DATABASE_URL");
 
-  if (provider === "gemini") {
-    if (!hasGeminiKey()) {
-      missing.push(
-        "GEMINI_API_KEY (get free key at aistudio.google.com/apikey)"
-      );
-    }
-  } else if (provider === "openrouter") {
-    if (!hasOpenRouterKey()) {
-      missing.push("OPENROUTER_API_KEY");
-    }
-  } else if (!hasOpenRouterKey() && !hasGeminiKey()) {
-    missing.push(
-      "GEMINI_API_KEY (free — aistudio.google.com/apikey) OR OPENROUTER_API_KEY"
-    );
+  if (provider === "groq" && !hasGroqKey()) {
+    missing.push("GROQ_API_KEY");
+  } else if (provider === "gemini" && !hasGeminiKey()) {
+    missing.push("GEMINI_API_KEY");
+  } else if (provider === "openrouter" && !hasOpenRouterKey()) {
+    missing.push("OPENROUTER_API_KEY");
+  } else if (!hasGroqKey() && !hasGeminiKey() && !hasOpenRouterKey()) {
+    missing.push("GROQ_API_KEY or GEMINI_API_KEY or OPENROUTER_API_KEY");
   }
 
   if (!env("NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY")) {

@@ -4,61 +4,35 @@ function sleep(ms: number) {
   return new Promise((r) => setTimeout(r, ms));
 }
 
-type RetryOptions = {
-  maxAttempts?: number;
-  retryStatuses?: number[];
-  timeoutMs?: number;
-};
+function isRateLimit(err: unknown): boolean {
+  if (!axios.isAxiosError(err)) return false;
+  const msg = String(err.response?.data?.message ?? "");
+  return /rate limit|quota|429|free limit|RESOURCE_EXHAUSTED/i.test(msg);
+}
 
-type RequestPayload = Record<string, unknown>;
-
-/** Retries with modelAttempt 0,1,2… so each call uses a different AI model. */
 export async function postGenerateWithModelRotation<T>(
   url: string,
-  buildPayload: (modelAttempt: number) => RequestPayload,
-  options: RetryOptions = {}
+  buildPayload: (modelAttempt: number) => Record<string, unknown>,
+  maxAttempts = 3
 ): Promise<T> {
-  const maxAttempts = options.maxAttempts ?? 5;
-  const retryStatuses = options.retryStatuses ?? [500, 502, 503, 504];
-  const timeoutMs = options.timeoutMs ?? 25_000;
-
-  let lastError: unknown;
+  let last: unknown;
 
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
     try {
       const { data } = await axios.post<T>(url, buildPayload(attempt), {
-        timeout: timeoutMs,
+        timeout: 28000,
       });
       return data;
     } catch (err) {
-      lastError = err;
-      const status = axios.isAxiosError(err) ? err.response?.status : undefined;
-      const canRetry =
-        attempt < maxAttempts - 1 &&
-        (retryStatuses.includes(status ?? 0) ||
-          (axios.isAxiosError(err) &&
-            (err.code === "ECONNABORTED" || err.code === "ERR_NETWORK")));
-
-      if (canRetry) {
-        await sleep(1500 + attempt * 1000);
+      last = err;
+      if (isRateLimit(err)) throw err;
+      const status = axios.isAxiosError(err) ? (err.response?.status ?? 0) : 0;
+      if (attempt < maxAttempts - 1 && [502, 503, 504, 500].includes(status)) {
+        await sleep(4000);
         continue;
       }
       throw err;
     }
   }
-
-  throw lastError;
-}
-
-/** Simple POST retry (same payload every time). */
-export async function postWithRetry<T>(
-  url: string,
-  data: unknown,
-  options: RetryOptions = {}
-): Promise<T> {
-  return postGenerateWithModelRotation<T>(url, () =>
-    typeof data === "object" && data !== null
-      ? (data as RequestPayload)
-      : { data }
-  , options);
+  throw last;
 }

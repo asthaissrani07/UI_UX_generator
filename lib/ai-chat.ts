@@ -1,6 +1,12 @@
-import { env, getAiProvider, hasGeminiKey, hasOpenRouterKey } from "@/lib/app-url";
-import { HOBBY_REQUEST_TIMEOUT_MS, isRetryableModelError } from "@/config/models";
+import {
+  getAiProvider,
+  hasGeminiKey,
+  hasGroqKey,
+  hasOpenRouterKey,
+} from "@/lib/app-url";
+import { HOBBY_REQUEST_TIMEOUT_MS } from "@/config/models";
 import { geminiChat, getGeminiModelLabel } from "@/lib/gemini-chat";
+import { groqChat, getGroqModelLabel } from "@/lib/groq-chat";
 import {
   formatServerError as formatOpenRouterError,
   openRouterChatForAttempt,
@@ -11,80 +17,95 @@ export type ChatMessage = {
   content: string;
 };
 
-export function hasAiProvider(): boolean {
-  return hasOpenRouterKey() || hasGeminiKey();
+async function runGroq(
+  messages: ChatMessage[],
+  maxTokens: number,
+  timeoutMs: number
+) {
+  const text = await groqChat(messages, maxTokens, timeoutMs);
+  return { text, model: `groq:${getGroqModelLabel()}` };
 }
 
-/** One AI call per HTTP request — OpenRouter with Gemini fallback. */
+async function runGemini(
+  messages: ChatMessage[],
+  maxTokens: number,
+  timeoutMs: number
+) {
+  const text = await geminiChat(messages, maxTokens, timeoutMs);
+  return { text, model: `gemini:${getGeminiModelLabel()}` };
+}
+
+/**
+ * ONE provider per HTTP request.
+ * modelAttempt 0 = Groq, 1 = Gemini, 2+ = OpenRouter (stops retry spam on one API).
+ */
 export async function aiChatForAttempt(
   messages: ChatMessage[],
   modelAttempt = 0,
-  maxTokens = 4096,
+  maxTokens = 3200,
   timeoutMs = HOBBY_REQUEST_TIMEOUT_MS
 ): Promise<{ text: string; model: string }> {
   const provider = getAiProvider();
+  const attempt = Number(modelAttempt) || 0;
+
+  if (provider === "groq") {
+    if (!hasGroqKey()) throw new Error("GROQ_API_KEY is not set on the server");
+    return runGroq(messages, maxTokens, timeoutMs);
+  }
 
   if (provider === "gemini") {
     if (!hasGeminiKey()) {
-      throw new Error(
-        "GEMINI_API_KEY is not set. Add it in Vercel → Environment Variables (aistudio.google.com/apikey)"
-      );
+      throw new Error("GEMINI_API_KEY is not set on the server");
     }
-    const text = await geminiChat(messages, { maxTokens, timeoutMs });
-    return { text, model: getGeminiModelLabel() };
+    return runGemini(messages, maxTokens, timeoutMs);
   }
 
   if (provider === "openrouter") {
-    return openRouterChatForAttempt(messages, modelAttempt, maxTokens, timeoutMs);
+    return openRouterChatForAttempt(messages, attempt, maxTokens, timeoutMs);
   }
 
-  // auto mode
-  if (hasGeminiKey() && modelAttempt >= 2) {
-    const text = await geminiChat(messages, { maxTokens, timeoutMs });
-    return { text, model: getGeminiModelLabel() };
-  }
-
-  if (!hasOpenRouterKey()) {
-    if (hasGeminiKey()) {
-      const text = await geminiChat(messages, { maxTokens, timeoutMs });
-      return { text, model: getGeminiModelLabel() };
+  // auto — rotate provider by attempt (never hit same API 5 times)
+  if (attempt === 0 && hasGroqKey()) {
+    try {
+      return await runGroq(messages, maxTokens, timeoutMs);
+    } catch (e) {
+      console.warn("[AI] Groq:", e instanceof Error ? e.message : e);
     }
-    throw new Error(
-      "No AI key configured. Add GEMINI_API_KEY on Vercel (free at aistudio.google.com/apikey)"
-    );
   }
 
-  try {
-    return await openRouterChatForAttempt(
-      messages,
-      modelAttempt,
-      maxTokens,
-      timeoutMs
-    );
-  } catch (e) {
-    const errMsg = e instanceof Error ? e.message : String(e);
-    if (hasGeminiKey() && isRetryableModelError(errMsg)) {
-      console.warn("[AI] OpenRouter failed, using Gemini:", errMsg.slice(0, 120));
-      const text = await geminiChat(messages, { maxTokens, timeoutMs });
-      return { text, model: getGeminiModelLabel() };
+  if (attempt === 1 && hasGeminiKey()) {
+    try {
+      return await runGemini(messages, maxTokens, timeoutMs);
+    } catch (e) {
+      console.warn("[AI] Gemini:", e instanceof Error ? e.message : e);
     }
-    throw e;
   }
+
+  if (hasOpenRouterKey()) {
+    try {
+      return await openRouterChatForAttempt(
+        messages,
+        attempt,
+        maxTokens,
+        timeoutMs
+      );
+    } catch (e) {
+      console.warn("[AI] OpenRouter:", e instanceof Error ? e.message : e);
+    }
+  }
+
+  if (hasGroqKey()) return runGroq(messages, maxTokens, timeoutMs);
+  if (hasGeminiKey()) return runGemini(messages, maxTokens, timeoutMs);
+
+  throw new Error("No AI key works. Add GROQ_API_KEY (console.groq.com) — recommended.");
 }
 
 export function formatServerError(e: unknown): string {
-  const errMsg =
+  const msg =
     e instanceof Error ? e.message : typeof e === "string" ? e : "Unknown error";
 
-  if (/Gemini rate limit/i.test(errMsg)) {
-    return "Gemini free limit reached. Wait a few minutes or get a key at aistudio.google.com/apikey";
-  }
-  if (/GEMINI_API_KEY/i.test(errMsg)) {
-    return "Add GEMINI_API_KEY from aistudio.google.com/apikey (free, separate from OpenRouter limits)";
-  }
-  if (/Gemini error \(403\)|API key not valid/i.test(errMsg)) {
-    return "Invalid GEMINI_API_KEY. Create one at aistudio.google.com/apikey";
-  }
+  if (/Groq|GROQ/i.test(msg)) return msg.slice(0, 260);
+  if (/Gemini|GEMINI/i.test(msg)) return msg.slice(0, 260);
 
   return formatOpenRouterError(e);
 }
