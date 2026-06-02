@@ -6,7 +6,6 @@ import { toast } from "sonner";
 import { Camera, Loader2, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { THEME_LIST } from "@/data/themes";
 import { useSetting } from "@/context/setting-context";
@@ -71,11 +70,21 @@ export default function SettingSection({
   };
 
   return (
-    <aside className="w-full lg:w-80 shrink-0 space-y-6 rounded-xl border bg-card p-5 h-fit">
+    <aside className="workspace-panel h-fit w-full shrink-0 space-y-7 p-6 lg:w-[19rem] xl:w-80">
       <div>
-        <Label>Project name</Label>
+        <p className="workspace-section-title">Project settings</p>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Name your mockup and customize the look.
+        </p>
+      </div>
+
+      <div>
+        <label className="workspace-label" htmlFor="project-name">
+          Project name
+        </label>
         <Input
-          className="mt-2"
+          id="project-name"
+          className="workspace-field"
           value={projectName}
           onChange={(e) => {
             setProjectName(e.target.value);
@@ -89,15 +98,18 @@ export default function SettingSection({
       </div>
 
       <div>
-        <Label>New screen (AI)</Label>
+        <label className="workspace-label" htmlFor="new-screen">
+          New screen (AI)
+        </label>
         <Textarea
-          className="mt-2 min-h-[72px] resize-none rounded-lg border-zinc-200 bg-zinc-50/80 text-sm leading-relaxed placeholder:text-zinc-400 focus:bg-white"
+          id="new-screen"
+          className="workspace-field min-h-[80px] resize-none text-sm leading-relaxed placeholder:text-muted-foreground/70"
           placeholder="e.g. Profile settings with avatar and preferences"
           value={newScreenInput}
           onChange={(e) => setNewScreenInput(e.target.value)}
         />
         <Button
-          className="mt-2 w-full gap-2"
+          className="workspace-btn-primary mt-3 w-full gap-2"
           onClick={generateNewScreen}
           disabled={generating}
         >
@@ -111,21 +123,19 @@ export default function SettingSection({
       </div>
 
       <div>
-        <Label className="mb-3 block">Themes</Label>
-        <div className="grid grid-cols-2 gap-2 max-h-[220px] overflow-y-auto pr-1">
+        <label className="workspace-label mb-3 block">Themes</label>
+        <div className="grid max-h-[220px] grid-cols-2 gap-2 overflow-y-auto pr-1">
           {THEME_LIST.map((theme) => (
             <button
               key={theme.name}
               type="button"
               onClick={() => onThemeSelect(theme.name)}
-              className={`rounded-lg border p-2 text-left text-xs transition-colors ${
-                selectedTheme === theme.name
-                  ? "border-primary bg-primary/10"
-                  : "hover:border-primary/50"
+              className={`workspace-theme-btn p-2.5 text-left ${
+                selectedTheme === theme.name ? "is-active" : ""
               }`}
             >
               <div
-                className="h-8 rounded mb-1"
+                className="mb-2 h-8 rounded-md"
                 style={{
                   background: `linear-gradient(135deg, ${theme.primary}, ${theme.accent})`,
                 }}
@@ -136,13 +146,16 @@ export default function SettingSection({
         </div>
       </div>
 
-      <div className="flex flex-col gap-2">
+      <div className="border-t border-border/80 pt-5">
         <Button
           variant="outline"
-          className="gap-2"
+          className="workspace-btn-outline w-full gap-2"
           onClick={() =>
             onScreenshot(
-              settingDetail?.theme ?? selectedTheme ?? projectDetail.theme ?? "Polar Mint"
+              settingDetail?.theme ??
+                selectedTheme ??
+                projectDetail.theme ??
+                "Polar Mint"
             )
           }
           disabled={screenshotLoading}

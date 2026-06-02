@@ -38,7 +38,7 @@ function CanvasControls({
 }) {
   const { zoomIn, zoomOut } = useControls();
   return (
-    <div className="absolute bottom-5 left-1/2 z-30 flex -translate-x-1/2 items-center gap-1 rounded-full border border-zinc-200/80 bg-white/95 px-2 py-1.5 shadow-lg backdrop-blur-md">
+    <div className="absolute bottom-5 left-1/2 z-30 flex -translate-x-1/2 items-center gap-1 rounded-full border px-2 py-1.5 workspace-canvas-controls">
       <Button
         variant="ghost"
         size="icon-sm"
@@ -192,7 +192,7 @@ export default function Canvas({
   return (
     <div
       ref={containerRef}
-      className={`canvas-workspace relative h-[min(88vh,980px)] min-h-[520px] w-full min-w-0 flex-1 overflow-hidden rounded-xl border border-zinc-200 bg-[#ececef] ${
+      className={`canvas-workspace workspace-canvas relative h-[min(88vh,980px)] min-h-[520px] w-full min-w-0 flex-1 overflow-hidden rounded-xl border ${
         isCanvasPanning ? "canvas-panning" : ""
       }`}
     >
@@ -241,10 +241,10 @@ export default function Canvas({
               contentStyle={{
                 width: contentBounds.width,
                 height: contentBounds.height,
-                backgroundColor: "#e4e4e8",
+                backgroundColor: "#d8e0e8",
                 backgroundImage:
-                  "radial-gradient(circle, rgba(0,0,0,0.12) 1px, transparent 1px)",
-                backgroundSize: "14px 14px",
+                  "radial-gradient(circle, rgba(42, 64, 96, 0.08) 1px, transparent 1px)",
+                backgroundSize: "16px 16px",
               }}
             >
               <div

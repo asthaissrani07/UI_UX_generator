@@ -42,18 +42,20 @@ export default function ProjectHeader({ onSaved }: Props) {
   };
 
   return (
-    <header className="flex items-center justify-between border-b px-4 py-3 bg-background">
-      <Link
-        href="/"
-        className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground"
-      >
-        <ArrowLeft className="h-4 w-4" />
+    <header className="workspace-header flex items-center justify-between border-b px-5 py-3.5 lg:px-6">
+      <Link href="/" className="workspace-back flex items-center gap-2">
+        <ArrowLeft className="h-3.5 w-3.5" />
         Back
       </Link>
-      <h1 className="font-semibold truncate max-w-[50%]">
+      <h1 className="workspace-title max-w-[50%] truncate text-lg md:text-xl">
         {settingDetail?.projectName ?? "Project"}
       </h1>
-      <Button size="sm" className="gap-2" onClick={onSave} disabled={loading}>
+      <Button
+        size="sm"
+        className="workspace-btn-primary gap-2 px-5"
+        onClick={onSave}
+        disabled={loading}
+      >
         {loading ? (
           <Loader2 className="h-4 w-4 animate-spin" />
         ) : (

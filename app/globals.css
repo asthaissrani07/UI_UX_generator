@@ -148,7 +148,7 @@
     0 0 0 2px rgba(255, 107, 107, 0.35);
 }
 
-.screen-iframe {
+  .screen-iframe {
   display: block;
   width: 100%;
   height: 100%;
@@ -156,4 +156,174 @@
   overflow: hidden;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+/* Project workspace — ZettaJoule-inspired (Geist + Inter, soft blue-gray) */
+.project-workspace {
+  --background: #e8edf2;
+  --foreground: #1a2433;
+  --card: #fafbfc;
+  --card-foreground: #1a2433;
+  --primary: #3d5e86;
+  --primary-foreground: #f8fafb;
+  --secondary: #eef2f5;
+  --secondary-foreground: #2a4060;
+  --muted: #e4eaef;
+  --muted-foreground: #5c6f82;
+  --accent: #dce6ee;
+  --accent-foreground: #2a4060;
+  --border: rgba(197, 211, 219, 0.9);
+  --input: rgba(197, 211, 219, 0.65);
+  --ring: #3d5e86;
+  background-color: var(--background);
+  color: var(--foreground);
+  font-weight: 300;
+}
+
+.project-workspace ::selection {
+  background: rgba(197, 211, 219, 0.95);
+  color: #3d5e86;
+}
+
+.project-workspace .workspace-title {
+  font-family: var(--font-heading-family), Arial, sans-serif;
+  font-weight: 300;
+  letter-spacing: -0.03em;
+  line-height: 1.15;
+  color: var(--foreground);
+}
+
+.project-workspace .workspace-label {
+  display: block;
+  font-size: 0.6875rem;
+  font-weight: 500;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--muted-foreground);
+}
+
+.project-workspace .workspace-panel {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 0.875rem;
+  box-shadow:
+    0 1px 2px rgba(26, 36, 51, 0.04),
+    0 8px 32px rgba(26, 36, 51, 0.03);
+}
+
+.project-workspace .workspace-field {
+  margin-top: 0.625rem;
+  border-color: var(--border);
+  background: #fff;
+  font-weight: 300;
+  border-radius: 0.5rem;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.project-workspace .workspace-field:focus-visible {
+  border-color: rgba(61, 94, 134, 0.45);
+  box-shadow: 0 0 0 3px rgba(61, 94, 134, 0.08);
+}
+
+.project-workspace .workspace-btn-primary {
+  border-radius: 9999px;
+  background: #2a4060 !important;
+  color: #f8fafb !important;
+  border: none;
+  font-weight: 400;
+  letter-spacing: 0.02em;
+  transition: background 0.2s ease, transform 0.15s ease;
+}
+
+.project-workspace .workspace-btn-primary:hover:not(:disabled) {
+  background: #3d5e86 !important;
+}
+
+.project-workspace .workspace-btn-outline {
+  border-radius: 9999px;
+  border-color: var(--border);
+  background: #fff;
+  font-weight: 400;
+  letter-spacing: 0.01em;
+  color: var(--foreground);
+}
+
+.project-workspace .workspace-btn-outline:hover:not(:disabled) {
+  background: var(--accent);
+  border-color: rgba(61, 94, 134, 0.25);
+}
+
+.project-workspace .workspace-header {
+  border-color: var(--border);
+  background: rgba(250, 251, 252, 0.92);
+  backdrop-filter: blur(10px);
+}
+
+.project-workspace .workspace-back {
+  font-size: 0.8125rem;
+  font-weight: 400;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted-foreground);
+  transition: color 0.2s ease;
+}
+
+.project-workspace .workspace-back:hover {
+  color: var(--foreground);
+}
+
+.project-workspace .workspace-status {
+  border: 1px solid rgba(197, 211, 219, 0.9);
+  background: rgba(250, 251, 252, 0.96);
+  color: #2a4060;
+  font-weight: 400;
+  letter-spacing: 0.01em;
+  box-shadow: 0 8px 32px rgba(26, 36, 51, 0.08);
+  backdrop-filter: blur(12px);
+}
+
+.project-workspace .workspace-theme-btn {
+  border-radius: 0.625rem;
+  border: 1px solid var(--border);
+  background: #fff;
+  font-size: 0.75rem;
+  font-weight: 400;
+  letter-spacing: 0.01em;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+}
+
+.project-workspace .workspace-theme-btn:hover {
+  border-color: rgba(61, 94, 134, 0.35);
+}
+
+.project-workspace .workspace-theme-btn.is-active {
+  border-color: #3d5e86;
+  background: rgba(61, 94, 134, 0.06);
+  box-shadow: 0 0 0 1px rgba(61, 94, 134, 0.12);
+}
+
+.project-workspace .workspace-canvas {
+  border-color: var(--border);
+  background: #dfe6ec;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.45);
+}
+
+.project-workspace .workspace-canvas-controls {
+  border-color: var(--border);
+  background: rgba(250, 251, 252, 0.96);
+  box-shadow: 0 8px 32px rgba(26, 36, 51, 0.1);
+  backdrop-filter: blur(12px);
+}
+
+.project-workspace .workspace-canvas-controls button {
+  font-weight: 400;
+  letter-spacing: 0.02em;
+}
+
+.project-workspace .workspace-section-title {
+  font-family: var(--font-heading-family), Arial, sans-serif;
+  font-size: 1.125rem;
+  font-weight: 300;
+  letter-spacing: -0.02em;
+  color: var(--foreground);
 }

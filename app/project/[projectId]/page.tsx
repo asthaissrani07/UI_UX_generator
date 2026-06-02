@@ -210,27 +210,27 @@ export default function ProjectCanvasPage() {
 
   if (!projectDetail && loading) {
     return (
-      <div className="flex min-h-screen items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      <div className="project-workspace flex min-h-screen items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-[#3d5e86]" />
       </div>
     );
   }
 
   return (
     <SettingProvider>
-      <div className="flex min-h-screen flex-col">
+      <div className="project-workspace flex min-h-screen flex-col">
         <ProjectHeader
           onSaved={(updates) =>
             setProjectDetail((prev) => (prev ? { ...prev, ...updates } : prev))
           }
         />
         {loading && (
-          <div className="absolute left-1/2 top-24 z-50 flex -translate-x-1/2 items-center gap-2 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900">
-            <Loader2 className="h-4 w-4 animate-spin" />
+          <div className="workspace-status absolute left-1/2 top-24 z-50 flex -translate-x-1/2 items-center gap-2.5 rounded-full px-5 py-2.5 text-sm">
+            <Loader2 className="h-4 w-4 animate-spin text-[#3d5e86]" />
             {loadingMessage}
           </div>
         )}
-        <div className="flex flex-1 flex-col lg:flex-row gap-4 p-4">
+        <div className="flex flex-1 flex-col gap-5 p-5 lg:flex-row lg:p-6">
           {projectDetail && (
             <>
               <SettingSection
