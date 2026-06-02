@@ -3,12 +3,11 @@ import { currentUser } from "@clerk/nextjs/server";
 import { and, eq } from "drizzle-orm";
 import { getDb } from "@/config/db";
 import { projectTable, screenConfigTable } from "@/config/schema";
-import { getOpenRouter, AI_MODEL } from "@/config/openrouter";
 import { APP_LAYOUT_CONFIG_PROMPT } from "@/data/prompts";
 import { THEME_LIST } from "@/data/themes";
-import { extractMessageText } from "@/lib/ai-content";
 import { parseLayoutConfig } from "@/lib/parse-layout-json";
 import { getMissingServerEnv } from "@/lib/app-url";
+import { formatServerError, openRouterChat } from "@/lib/openrouter-chat";
 
 function resolveTheme(name: string | undefined): string {
   if (!name) return "Polar Mint";
@@ -21,6 +20,10 @@ function resolveTheme(name: string | undefined): string {
 function normalizeDevice(device: unknown): "website" | "mobile" {
   const value = String(device ?? "website").toLowerCase();
   return value === "mobile" ? "mobile" : "website";
+}
+
+function clip(value: string, max: number): string {
+  return value.length > max ? `${value.slice(0, max - 1)}…` : value;
 }
 
 export const maxDuration = 60;
@@ -59,28 +62,13 @@ export async function POST(req: NextRequest) {
       deviceType
     );
 
-    const completion = await getOpenRouter().chat.send({
-      model: AI_MODEL,
-      messages: [
-        { role: "system", content: systemPrompt },
-        {
-          role: "user",
-          content: `Product idea: ${userInput}\n\nDevice type: ${deviceType}`,
-        },
-      ],
-      stream: false,
-    });
-
-    const raw = extractMessageText(
-      completion.choices?.[0]?.message?.content
-    ).trim();
-
-    if (!raw) {
-      return NextResponse.json(
-        { message: "AI returned an empty response. Check OpenRouter credits." },
-        { status: 502 }
-      );
-    }
+    const raw = await openRouterChat([
+      { role: "system", content: systemPrompt },
+      {
+        role: "user",
+        content: `Product idea: ${userInput}\n\nDevice type: ${deviceType}`,
+      },
+    ]);
 
     let parsed;
     try {
@@ -95,19 +83,31 @@ export async function POST(req: NextRequest) {
 
     const theme = resolveTheme(parsed.theme);
 
-    await getDb()
-      .update(projectTable)
-      .set({
-        projectName: parsed.projectName,
-        theme,
-        projectVisualDescription: parsed.projectVisualDescription,
-      })
+    const [project] = await getDb()
+      .select()
+      .from(projectTable)
       .where(
         and(
           eq(projectTable.projectId, projectId),
           eq(projectTable.userId, email)
         )
       );
+
+    if (!project) {
+      return NextResponse.json(
+        { message: "Project not found. Create a new project and try again." },
+        { status: 404 }
+      );
+    }
+
+    await getDb()
+      .update(projectTable)
+      .set({
+        projectName: clip(parsed.projectName, 255),
+        theme: clip(theme, 100),
+        projectVisualDescription: parsed.projectVisualDescription,
+      })
+      .where(eq(projectTable.projectId, projectId));
 
     await getDb()
       .delete(screenConfigTable)
@@ -118,8 +118,8 @@ export async function POST(req: NextRequest) {
       await getDb().insert(screenConfigTable).values({
         projectId,
         screenId: `${projectId.slice(0, 8)}-screen-${i + 1}`,
-        screenName: screen.name,
-        purpose: screen.purpose,
+        screenName: clip(screen.name, 255),
+        purpose: clip(screen.purpose, 500),
         screenDescription: screen.layoutDescription,
       });
     }
@@ -127,19 +127,9 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ...parsed, theme });
   } catch (e) {
     console.error("generate-config error:", e);
-    const errMsg = e instanceof Error ? e.message : String(e);
-    let message = "Config generation failed on the server";
-
-    if (errMsg.includes("OPENROUTER")) {
-      message = "OpenRouter API key is missing or invalid";
-    } else if (errMsg.includes("DATABASE_URL")) {
-      message = "DATABASE_URL is not configured on the server";
-    } else if (/401|403|unauthorized|invalid.*key/i.test(errMsg)) {
-      message = "OpenRouter rejected the API key. Check credits and key on Vercel.";
-    } else if (/timeout|ETIMEDOUT|ECONNRESET/i.test(errMsg)) {
-      message = "AI service timed out. Please try again.";
-    }
-
-    return NextResponse.json({ message }, { status: 500 });
+    return NextResponse.json(
+      { message: formatServerError(e) },
+      { status: 500 }
+    );
   }
 }
