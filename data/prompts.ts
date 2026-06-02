@@ -29,6 +29,9 @@ export const GENERATE_SCREEN_PROMPT = `You are an expert UI engineer. Generate a
 
 Requirements:
 - Output ONLY the inner HTML for the screen body (no <html>, <head>, or <body> tags).
+- Wrap everything in ONE root <div> with realistic content for the full screen.
+- The design must fit ONE mobile viewport (~390×844px) — use compact spacing, avoid long pages, no min-h-screen.
+- Include ALL sections described in the layout (header, main content, cards, lists, buttons) — never output only a title.
 - Use semantic structure: header, main, sections, buttons, cards as needed.
 - Use placeholder images: https://picsum.photos/seed/{random}/400/300
 - Use realistic placeholder text matching the screen purpose.
@@ -36,7 +39,8 @@ Requirements:
 - Mobile: max-width feel ~390px content; Website: wider layout ~1200px content area.
 - MUST use semantic Tailwind classes tied to theme: bg-background, text-foreground, bg-primary, text-primary-foreground, bg-secondary, bg-card, text-card-foreground, bg-muted, text-muted-foreground, border-border, bg-accent. Do NOT use raw hex colors or generic gray-*/blue-* utilities.
 - Make it polished, modern SaaS quality — spacing, typography hierarchy, subtle shadows.
-- Do not include <script> tags.`;
+- Do not include <script> tags.
+- Output the COMPLETE HTML in one response — do not truncate.`;
 
 export const EDIT_SCREEN_PROMPT = `You are an expert UI engineer. The user wants to MODIFY an existing screen.
 

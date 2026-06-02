@@ -6,8 +6,32 @@ import { screenConfigTable } from "@/config/schema";
 import { GENERATE_SCREEN_PROMPT, EDIT_SCREEN_PROMPT } from "@/data/prompts";
 import { getMissingServerEnv } from "@/lib/app-url";
 import { formatServerError, openRouterChat } from "@/lib/openrouter-chat";
+import {
+  cleanScreenHtml,
+  isScreenCodeComplete,
+} from "@/lib/validate-screen-html";
 
 export const maxDuration = 60;
+
+const SCREEN_MAX_TOKENS = 8192;
+
+async function generateScreenCode(
+  systemPrompt: string,
+  userContent: string,
+  retryHint?: string
+): Promise<string> {
+  const messages: Array<{ role: "system" | "user"; content: string }> = [
+    { role: "system", content: systemPrompt },
+    { role: "user", content: userContent },
+  ];
+
+  if (retryHint) {
+    messages.push({ role: "user", content: retryHint });
+  }
+
+  const raw = await openRouterChat(messages, undefined, SCREEN_MAX_TOKENS);
+  return cleanScreenHtml(raw);
+}
 
 export async function POST(req: NextRequest) {
   try {
@@ -53,12 +77,25 @@ export async function POST(req: NextRequest) {
 
     const systemPrompt = editPrompt ? EDIT_SCREEN_PROMPT : GENERATE_SCREEN_PROMPT;
 
-    let code = await openRouterChat([
-      { role: "system", content: systemPrompt },
-      { role: "user", content: userContent },
-    ]);
+    let code = await generateScreenCode(systemPrompt, userContent);
 
-    code = code.replace(/^```html?\s*/i, "").replace(/```\s*$/i, "");
+    if (!isScreenCodeComplete(code)) {
+      code = await generateScreenCode(
+        systemPrompt,
+        userContent,
+        "Your previous response was incomplete or too short. Regenerate the FULL screen HTML with header, main sections, cards/lists/buttons as described. One complete screen — do not truncate."
+      );
+    }
+
+    if (!isScreenCodeComplete(code)) {
+      return NextResponse.json(
+        {
+          message:
+            "AI returned incomplete screen HTML. Try again or switch OPENROUTER_MODEL to qwen/qwen3-coder:free.",
+        },
+        { status: 502 }
+      );
+    }
 
     const [updated] = await getDb()
       .update(screenConfigTable)
@@ -82,7 +119,12 @@ export async function POST(req: NextRequest) {
   } catch (e) {
     console.error("generate-screen-ui error:", e);
     return NextResponse.json(
-      { message: formatServerError(e).replace("Config generation", "Screen generation") },
+      {
+        message: formatServerError(e).replace(
+          "Config generation",
+          "Screen generation"
+        ),
+      },
       { status: 500 }
     );
   }

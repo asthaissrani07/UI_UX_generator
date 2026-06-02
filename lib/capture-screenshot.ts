@@ -1,19 +1,15 @@
 import { toPng } from "html-to-image";
 
+const CAPTURE_PIXEL_RATIO = 2;
+
 const CAPTURE_OPTS = {
   cacheBust: true,
-  pixelRatio: 1.25,
+  pixelRatio: CAPTURE_PIXEL_RATIO,
   backgroundColor: "#ffffff",
   skipFonts: true,
   filter: (node: HTMLElement) => {
     if (node.tagName === "SCRIPT") return false;
     if (node.tagName === "LINK") return false;
-    if (node.tagName === "IMG") {
-      const src = (node as HTMLImageElement).src;
-      if (src && !src.startsWith("data:") && !src.startsWith("blob:")) {
-        return false;
-      }
-    }
     return true;
   },
 } as const;
@@ -27,39 +23,40 @@ function loadImage(src: string): Promise<HTMLImageElement> {
   });
 }
 
-function waitForIframeReady(
-  iframe: HTMLIFrameElement,
-  timeout = 8000
-): Promise<void> {
-  return new Promise((resolve, reject) => {
-    const deadline = Date.now() + timeout;
-
-    const check = () => {
-      const doc = iframe.contentDocument;
-      if (doc?.body && doc.body.childElementCount > 0) {
-        resolve();
-        return;
-      }
-      if (Date.now() > deadline) {
-        reject(new Error("Screen content not ready yet"));
-        return;
-      }
-      requestAnimationFrame(check);
-    };
-
-    if (iframe.contentDocument?.readyState === "complete") {
-      setTimeout(check, 200);
-    } else {
-      iframe.addEventListener("load", () => setTimeout(check, 200), {
-        once: true,
-      });
-      setTimeout(check, 400);
-    }
-  });
+function sleep(ms: number) {
+  return new Promise((r) => setTimeout(r, ms));
 }
 
-async function captureNode(node: HTMLElement): Promise<string> {
-  return toPng(node, CAPTURE_OPTS);
+function triggerIframeFit(iframe: HTMLIFrameElement) {
+  const win = iframe.contentWindow as
+    | (Window & { applyScreenFit?: () => void })
+    | null;
+  win?.applyScreenFit?.();
+}
+
+async function waitForIframeLayout(
+  iframe: HTMLIFrameElement,
+  timeout = 12000
+): Promise<void> {
+  const deadline = Date.now() + timeout;
+
+  while (Date.now() < deadline) {
+    const doc = iframe.contentDocument;
+    const root = doc?.getElementById("screen-root");
+    if (root && root.childElementCount > 0) {
+      triggerIframeFit(iframe);
+      await sleep(350);
+      triggerIframeFit(iframe);
+      await sleep(200);
+
+      const text = root.textContent?.trim() ?? "";
+      const hasHeight = root.getBoundingClientRect().height > 40;
+      if (text.length > 0 && hasHeight) return;
+    }
+    await sleep(250);
+  }
+
+  throw new Error("Screen content not ready yet");
 }
 
 export function downloadDataUrl(dataUrl: string, filename: string) {
@@ -94,35 +91,48 @@ export async function compressDataUrlForStorage(
   return canvas.toDataURL("image/jpeg", quality);
 }
 
+/** Captures exactly what is visible inside the iframe frame. */
 export async function captureIframe(
   iframe: HTMLIFrameElement
 ): Promise<string> {
-  await waitForIframeReady(iframe);
+  await waitForIframeLayout(iframe);
   const doc = iframe.contentDocument;
   if (!doc?.body) throw new Error("Screen preview not ready");
 
-  const targets = [doc.body, doc.documentElement].filter(
-    (node): node is HTMLElement => node instanceof HTMLElement
-  );
+  const w = iframe.clientWidth;
+  const h = iframe.clientHeight;
+  if (w <= 0 || h <= 0) {
+    throw new Error("Screen frame has no size");
+  }
 
-  for (const target of targets) {
+  triggerIframeFit(iframe);
+  await sleep(150);
+
+  const root = doc.getElementById("screen-root");
+  if (root) {
     try {
-      return await captureNode(target);
+      return await toPng(doc.body, {
+        ...CAPTURE_OPTS,
+        width: w,
+        height: h,
+        canvasWidth: Math.round(w * CAPTURE_PIXEL_RATIO),
+        canvasHeight: Math.round(h * CAPTURE_PIXEL_RATIO),
+      });
     } catch {
-      /* try next target */
+      /* fall through */
     }
   }
 
   const wrapper = iframe.closest("[data-screen-capture]");
   if (wrapper instanceof HTMLElement) {
-    try {
-      return await toPng(wrapper, {
-        ...CAPTURE_OPTS,
-        backgroundColor: "#f4f4f5",
-      });
-    } catch {
-      /* fall through */
-    }
+    return await toPng(wrapper, {
+      ...CAPTURE_OPTS,
+      width: w,
+      height: h,
+      canvasWidth: Math.round(w * CAPTURE_PIXEL_RATIO),
+      canvasHeight: Math.round(h * CAPTURE_PIXEL_RATIO),
+      backgroundColor: "#ffffff",
+    });
   }
 
   throw new Error("Could not capture this screen. Try again in a moment.");
@@ -133,8 +143,8 @@ export function getScreenIframes(): HTMLIFrameElement[] {
     "iframe[data-screen-capture-iframe]"
   );
   return Array.from(nodes).filter((iframe) => {
-    const doc = iframe.contentDocument;
-    return doc?.body && doc.body.childElementCount > 0;
+    const root = iframe.contentDocument?.getElementById("screen-root");
+    return root && root.childElementCount > 0;
   });
 }
 
@@ -143,8 +153,8 @@ export async function captureAllIframes(
 ): Promise<string> {
   const valid =
     iframes?.filter((f): f is HTMLIFrameElement => {
-      if (!f?.contentDocument?.body) return false;
-      return f.contentDocument.body.childElementCount > 0;
+      const root = f?.contentDocument?.getElementById("screen-root");
+      return Boolean(root && root.childElementCount > 0);
     }) ?? getScreenIframes();
 
   if (valid.length === 0) {

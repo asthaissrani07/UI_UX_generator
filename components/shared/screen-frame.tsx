@@ -69,7 +69,7 @@ export default function ScreenFrame({
     const iframe = iframeRef.current;
     if (!iframe || !screen.code) return;
     iframe.srcdoc = wrapScreenHtml(screen.code, theme, viewportH, safeW);
-  }, [screen.code, theme, viewportH]);
+  }, [screen.code, theme, viewportH, safeW]);
 
   useEffect(() => {
     applyThemeToIframe();

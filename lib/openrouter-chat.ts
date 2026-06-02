@@ -11,7 +11,8 @@ type ChatMessage = {
 
 export async function openRouterChat(
   messages: ChatMessage[],
-  model = AI_MODEL
+  model = AI_MODEL,
+  maxTokens = 8192
 ): Promise<string> {
   const apiKey = process.env.OPENROUTER_API_KEY;
   if (!apiKey) {
@@ -30,6 +31,7 @@ export async function openRouterChat(
       model,
       messages,
       stream: false,
+      max_tokens: maxTokens,
     }),
   });
 

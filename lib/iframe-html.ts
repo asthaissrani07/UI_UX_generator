@@ -81,39 +81,39 @@ const IFRAME_HEAD = `<!DOCTYPE html>
       padding: 0;
       width: 100%;
       height: VIEWPORT_HEIGHTpx;
-      max-height: VIEWPORT_HEIGHTpx;
+      min-height: VIEWPORT_HEIGHTpx;
       overflow: hidden !important;
       -webkit-font-smoothing: antialiased;
       -moz-osx-font-smoothing: grayscale;
       text-rendering: optimizeLegibility;
     }
-    body > *:first-child {
-      min-height: 100%;
-      max-height: 100%;
+    #screen-root {
+      box-sizing: border-box;
+      width: 100%;
+      min-height: VIEWPORT_HEIGHTpx;
     }
   </style>
 </head>
 <body>`;
 
 const IFRAME_TAIL = `<script>
-  (function refreshTailwind() {
-    if (typeof tailwind !== "undefined" && tailwind.refresh) {
-      tailwind.refresh();
-    } else {
-      setTimeout(refreshTailwind, 50);
-    }
-  })();
-
-  (function fitViewport() {
+  (function initScreen() {
     var vh = VIEWPORT_HEIGHT;
-    var root = document.body.firstElementChild;
-    if (!root) return;
 
     function applyFit() {
-      document.documentElement.style.overflow = "hidden";
-      document.body.style.overflow = "hidden";
-      var sh = Math.max(root.scrollHeight, root.getBoundingClientRect().height);
-      if (sh > vh + 4) {
+      var root = document.getElementById("screen-root");
+      if (!root) return;
+
+      root.style.transform = "none";
+      root.style.width = "100%";
+
+      var sh = Math.max(
+        root.scrollHeight,
+        root.offsetHeight,
+        root.getBoundingClientRect().height
+      );
+
+      if (sh > vh + 2) {
         var scale = vh / sh;
         root.style.transformOrigin = "top left";
         root.style.transform = "scale(" + scale + ")";
@@ -121,16 +121,64 @@ const IFRAME_TAIL = `<script>
       }
     }
 
-    if (document.fonts && document.fonts.ready) {
-      document.fonts.ready.then(function () {
+    window.applyScreenFit = applyFit;
+
+    function scheduleFit() {
+      requestAnimationFrame(function () {
         requestAnimationFrame(applyFit);
       });
-    } else {
-      setTimeout(applyFit, 120);
+    }
+
+    function refreshTailwind() {
+      if (typeof tailwind !== "undefined" && tailwind.refresh) {
+        tailwind.refresh();
+        scheduleFit();
+        setTimeout(scheduleFit, 150);
+        setTimeout(scheduleFit, 500);
+        setTimeout(scheduleFit, 1200);
+        setTimeout(scheduleFit, 2500);
+      } else {
+        setTimeout(refreshTailwind, 50);
+      }
+    }
+
+    refreshTailwind();
+
+    var root = document.getElementById("screen-root");
+    if (root && window.ResizeObserver) {
+      new ResizeObserver(scheduleFit).observe(root);
+    }
+
+    document.body.addEventListener("load", scheduleFit, true);
+
+    if (document.fonts && document.fonts.ready) {
+      document.fonts.ready.then(scheduleFit);
     }
   })();
 </script>
 </body></html>`;
+
+function wrapBodyWithRoot(bodyHtml: string): string {
+  const trimmed = bodyHtml.trim();
+  if (!trimmed) {
+    return `<div id="screen-root"><p class="p-4 text-muted-foreground">Loading…</p></div>`;
+  }
+
+  if (/id=["']screen-root["']/i.test(trimmed)) {
+    return trimmed;
+  }
+
+  const rootMatch = trimmed.match(/^<([a-zA-Z][\w-]*)(\s[^>]*)?>[\s\S]*<\/\1>\s*$/);
+  if (rootMatch) {
+    const tag = rootMatch[1];
+    if (rootMatch[2]?.match(/\bid=/i)) {
+      return `<div id="screen-root">${trimmed}</div>`;
+    }
+    return trimmed.replace(/^<([a-zA-Z][\w-]*)/, '<$1 id="screen-root"');
+  }
+
+  return `<div id="screen-root">${trimmed}</div>`;
+}
 
 export function wrapScreenHtml(
   bodyHtml: string,
@@ -143,11 +191,14 @@ export function wrapScreenHtml(
   const forceCss = themeForceStyles(theme);
   const configScript = tailwindConfigScript(theme);
 
+  const trimmed = bodyHtml.trim();
+  const inner = wrapBodyWithRoot(trimmed);
+
   return IFRAME_HEAD.replace("THEME_NAME", themeName)
     .replace("TAILWIND_CONFIG_SCRIPT", configScript)
     .replace("THEME_CSS", themeCss)
     .replace("THEME_FORCE_CSS", forceCss)
     .replace(/VIEWPORT_HEIGHT/g, String(Math.round(viewportHeight)))
     .replace(/VIEWPORT_WIDTH/g, String(Math.round(viewportWidth)))
-    .concat(bodyHtml, IFRAME_TAIL.replace(/VIEWPORT_HEIGHT/g, String(Math.round(viewportHeight))));
+    .concat(inner, IFRAME_TAIL.replace(/VIEWPORT_HEIGHT/g, String(Math.round(viewportHeight))));
 }

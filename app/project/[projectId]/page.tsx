@@ -16,6 +16,7 @@ import {
   getScreenIframes,
 } from "@/lib/capture-screenshot";
 import type { ProjectType, ScreenConfig } from "@/types";
+import { isScreenCodeComplete } from "@/lib/validate-screen-html";
 
 export default function ProjectCanvasPage() {
   const { projectId } = useParams<{ projectId: string }>();
@@ -69,7 +70,7 @@ export default function ProjectCanvasPage() {
 
     for (let i = 0; i < screenConfig.length; i++) {
       const screen = screenConfig[i];
-      if (screen.code) continue;
+      if (screen.code && isScreenCodeComplete(screen.code)) continue;
 
       setLoadingMessage(`Generating screen ${i + 1}...`);
       try {
@@ -100,7 +101,7 @@ export default function ProjectCanvasPage() {
 
   const saveScreenshotQuiet = useCallback(async () => {
     try {
-      await new Promise((r) => setTimeout(r, 2000));
+      await new Promise((r) => setTimeout(r, 3500));
       const ready = getScreenIframes();
       if (ready.length === 0) return;
       const full = await captureAllIframes(ready);
@@ -141,7 +142,9 @@ export default function ProjectCanvasPage() {
     )
       return;
 
-    const needsUi = screenConfig.some((s) => !s.code);
+    const needsUi = screenConfig.some(
+      (s) => !s.code || !isScreenCodeComplete(s.code)
+    );
     if (needsUi) generateScreenUI();
   }, [projectDetail, screenConfigOriginal]);
 
